@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Тест доступа к таблице</title>
+</head>
+<body>
+    <h2>Тест загрузки таблицы с Яндекс.Диска</h2>
+    <div id="log"></div>
+
+    <script>
+    // ВСТАВЬТЕ ВАШУ ССЫЛКУ НА ТАБЛИЦУ (С /i/)
+    const TABLE_SHARE_URL = "https://disk.yandex.ru/i/ВАША_ССЫЛКА_СЮДА";
+    
+    function log(msg) {
+        const div = document.getElementById('log');
+        div.innerHTML += '<p>' + msg + '</p>';
+        console.log(msg);
+    }
+
+    async function test() {
+        log('1. Начинаем загрузку...');
+        log('2. Ссылка: ' + TABLE_SHARE_URL);
+        
+        try {
+            // Получаем ключ из ссылки
+            const key = TABLE_SHARE_URL.split('/').pop();
+            log('3. Ключ файла: ' + key);
+            
+            const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${key}`;
+            log('4. Запрашиваем API: ' + apiUrl);
+            
+            const response = await fetch(apiUrl);
+            log('5. Статус ответа API: ' + response.status);
+            
+            if (!response.ok) {
+                throw new Error(`Ошибка API: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            log('6. Получили прямую ссылку на файл: ' + data.href);
+            
+            const fileResponse = await fetch(data.href);
+            log('7. Статус загрузки файла: ' + fileResponse.status);
+            
+            const blob = await fileResponse.blob();
+            log('8. Размер файла: ' + blob.size + ' байт');
+            
+            // Пробуем прочитать как текст
+            const text = await blob.text();
+            log('9. Первые 200 символов файла: ' + text.substring(0, 200));
+            
+            log('✅ ТЕСТ ПРОЙДЕН! Файл успешно загружен.');
+        } catch (e) {
+            log('❌ ОШИБКА: ' + e.message);
+        }
+    }
+    
+    test();
+    </script>
+</body>
+</html>
