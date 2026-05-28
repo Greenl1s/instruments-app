@@ -64,7 +64,7 @@ function escapeHtml(value) {
 async function getTableData() {
     const key = TABLE_SHARE_URL.split('/').pop();
     // ВАШ АДРЕС ПРОКСИ:
-    const PROXY_URL = "https://cors-proxy.vercel.app/api/cors?url=";
+    const PROXY_URL = "https://my-cors-proxy-three-liart.vercel.app/";
     
     // 1. Запрос к API Яндекс.Диска через прокси
     const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${key}`;
