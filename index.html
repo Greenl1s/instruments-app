@@ -67,7 +67,7 @@ async function getTableData() {
     const PROXY_URL = "https://my-cors-proxy-three-liart.vercel.app/";
     
     // 1. Запрос к API Яндекс.Диска через прокси
-    const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${key}`;
+    const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/uJh4LJh2vH0Chw`;
     const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
     
     const response = await fetch(proxiedApiUrl);
