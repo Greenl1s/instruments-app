@@ -45,13 +45,12 @@
 <script>
     // ========== НАСТРОЙКИ ==========
     const PROXY_URL = "https://corsfix.com/?url=";
-    const PUBLIC_KEY = "uJh4LJh2vH0Chw";  // Ваш ключ из ссылки
+    const PUBLIC_KEY = "uJh4LJh2vH0Chw";  // Ваш ключ
     // ===============================
 
     let currentInstruments = [];
 
     async function getTableData() {
-        // 1. Получаем ссылку на скачивание через прокси
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
         
@@ -60,13 +59,11 @@
         const data = await response.json();
         if (!data.href) throw new Error("Нет ссылки на скачивание");
         
-        // 2. Скачиваем файл через тот же прокси
         const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
         const fileResponse = await fetch(proxiedFileUrl);
         if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
         const blob = await fileResponse.blob();
         
-        // 3. Читаем Excel
         return await readExcelFromBlob(blob);
     }
 
@@ -168,8 +165,8 @@
     function showEditForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
-            <div class="form-group"><label>ФИО сотрудника</label><input type="text" id="takenBy" value="${instrument.taken_by}"></div>
-            <div class="form-group"><label>Куда взял</label><input type="text" id="takenWhere" value="${instrument.taken_where}"></div>
+            <div class="form-group"><label>ФИО сотрудника</label><input type="text" id="takenBy" value="${instrument.taken_by.replace(/"/g, '&quot;')}"></div>
+            <div class="form-group"><label>Куда взял</label><input type="text" id="takenWhere" value="${instrument.taken_where.replace(/"/g, '&quot;')}"></div>
             <div class="form-group"><label>Дата выдачи</label><input type="date" id="takenDate" value="${instrument.taken_date || today}"></div>
             <button class="btn btn-edit" id="saveBtn">Сохранить</button>
             <button class="btn btn-clear" id="clearBtn">Очистить</button>
@@ -250,7 +247,6 @@
         }
     }
 
-    // Загружаем библиотеку XLSX и запускаем
     const script = document.createElement('script');
     script.src = 'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js';
     script.onload = async () => {
