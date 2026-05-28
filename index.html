@@ -63,13 +63,23 @@ function escapeHtml(value) {
 
 async function getTableData() {
     const key = TABLE_SHARE_URL.split('/').pop();
-    const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${key}`;
-    const response = await fetch(apiUrl);
+    // ВАШ АДРЕС ПРОКСИ:
+    const PROXY_URL = "https://cors-proxy.vercel.app/api/cors?url=";
+    
+    // 1. Запрос к API Яндекс.Диска через прокси
+    const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${key}`;
+    const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
+    
+    const response = await fetch(proxiedApiUrl);
     if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
     const data = await response.json();
-    const fileUrl = data.href;
-    const fileResponse = await fetch(fileUrl);
+    
+    // 2. Скачивание файла через прокси
+    const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
+    const fileResponse = await fetch(proxiedFileUrl);
     const blob = await fileResponse.blob();
+    
+    // 3. Чтение Excel
     return await readExcelFromBlob(blob);
 }
 
