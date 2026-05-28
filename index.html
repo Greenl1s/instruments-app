@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Учёт приборов (тест с прокси)</title>
+    <title>Учёт приборов</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; padding: 20px; }
@@ -22,6 +22,12 @@
         .btn-edit { background: #eab308; color: #1e293b; }
         .btn-clear { background: #64748b; }
         .btn-qr { background: #8b5cf6; }
+        .btn-small { padding: 8px 16px; font-size: 13px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; border-radius: 24px; padding: 24px; max-width: 400px; width: 90%; margin: 20px; text-align: center; }
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border-bottom: 1px solid #e2e8f0; text-decoration: none; color: #1e293b; }
         .list-item:hover { background: #f8fafc; }
         .loading, .error { text-align: center; padding: 40px; color: #64748b; }
@@ -40,41 +46,34 @@
 <script>
     // ========== НАСТРОЙКИ ==========
     // ВАШ ПУБЛИЧНЫЙ КЛЮЧ (из ссылки на таблицу Яндекс.Диска)
-    // Ссылка вида: https://disk.yandex.ru/i/uJh4LJh2vH0Chw → ключ "uJh4LJh2vH0Chw"
-    const PUBLIC_KEY = "uJh4LJh2vH0Chw";  // ЗАМЕНИТЕ НА ВАШ КЛЮЧ!
+    const PUBLIC_KEY = "uJh4LJh2vH0Chw";
     
-    // Используем публичный прокси corsproxy.io (без регистрации)
+    // ВАШ ЛИЧНЫЙ ПРОКСИ НА CLOUDFLARE WORKERS
     const PROXY_URL = "https://autumn-queen-abbie.kirik7061.workers.dev/?url=";
     // ===============================
 
     let currentInstruments = [];
 
     async function getTableData() {
-    const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
-    // Используем CORS Anywhere
-    const PROXY_URL = "https://autumn-queen-abbie.kirik7061.workers.dev/?url=";
-    const proxiedApiUrl = PROXY_URL + yandexApiUrl;  // без encodeURIComponent, т.к. CORS Anywhere ожидает обычный URL
-    
-    console.log("1. Запрос к API через прокси:", proxiedApiUrl);
-    
-    const response = await fetch(proxiedApiUrl, {
-        headers: { 'Origin': window.location.origin }
-    });
-    if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
-    const data = await response.json();
-    if (!data.href) throw new Error("Нет ссылки на скачивание");
-    
-    const proxiedFileUrl = PROXY_URL + data.href;
-    console.log("2. Загрузка файла через прокси:", proxiedFileUrl);
-    
-    const fileResponse = await fetch(proxiedFileUrl, {
-        headers: { 'Origin': window.location.origin }
-    });
-    if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
-    const blob = await fileResponse.blob();
-    
-    return await readExcelFromBlob(blob);
-}
+        const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
+        const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
+        
+        console.log("1. Запрос к API через прокси:", proxiedApiUrl);
+        
+        const response = await fetch(proxiedApiUrl);
+        if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
+        const data = await response.json();
+        if (!data.href) throw new Error("Нет ссылки на скачивание");
+        
+        const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
+        console.log("2. Загрузка файла через прокси:", proxiedFileUrl);
+        
+        const fileResponse = await fetch(proxiedFileUrl);
+        if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
+        const blob = await fileResponse.blob();
+        
+        return await readExcelFromBlob(blob);
+    }
 
     function readExcelFromBlob(blob) {
         return new Promise((resolve, reject) => {
@@ -256,7 +255,6 @@
         }
     }
 
-    // Запуск
     (async () => {
         try {
             currentInstruments = await getTableData();
