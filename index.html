@@ -52,7 +52,7 @@
     async function getTableData() {
     const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
     // Используем CORS Anywhere
-    const PROXY_URL = "https://cors-anywhere.herokuapp.com/";
+    const PROXY_URL = "https://autumn-queen-abbie.kirik7061.workers.dev/?url=";
     const proxiedApiUrl = PROXY_URL + yandexApiUrl;  // без encodeURIComponent, т.к. CORS Anywhere ожидает обычный URL
     
     console.log("1. Запрос к API через прокси:", proxiedApiUrl);
