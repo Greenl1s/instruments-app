@@ -60,34 +60,33 @@ function escapeHtml(value) {
         return m;
     });
 }
-
 async function getTableData() {
     const key = TABLE_SHARE_URL.split('/').pop();
     const PROXY_URL = "https://my-cors-proxy.vercel.app/api/cors?url=";
-    
+
     // 1. Запрос к API Яндекс.Диска через прокси
-    const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/uJh4LJh2vH0Chw`;
+    const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${key}`;
     const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
-    
+
     console.log("1. Запрос к API:", proxiedApiUrl);
-    
+
     const response = await fetch(proxiedApiUrl);
     if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
-    
+
     const data = await response.json();
     console.log("2. Получен ответ:", data);
-    
+
     // 2. Скачивание файла через прокси
     if (!data.href) throw new Error("Нет ссылки на скачивание");
     const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
     console.log("3. Загрузка файла:", proxiedFileUrl);
-    
+
     const fileResponse = await fetch(proxiedFileUrl);
     if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
-    
+
     const blob = await fileResponse.blob();
-    console.log("4. Файл загружен, размер:", blob.size);
-    
+    console.log("4. Файл загружен, размер:", blob.size, "байт");
+
     // 3. Чтение Excel
     return await readExcelFromBlob(blob);
 }
