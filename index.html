@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Учёт приборов</title>
     <style>
-        /* Стили остаются прежними — они уже у вас есть, здесь сокращённо */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
@@ -23,7 +22,6 @@
         .btn-edit { background: #eab308; color: #1e293b; }
         .btn-clear { background: #64748b; }
         .btn-qr { background: #8b5cf6; }
-        .btn-save { background: #10b981; }
         .btn-small { padding: 8px 16px; font-size: 13px; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
@@ -47,23 +45,34 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
     // ========== НАСТРОЙКИ ==========
-   const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";
-const PUBLIC_KEY = "uJh4LJh2vH0Chw";
+    const PUBLIC_KEY = "uJh4LJh2vH0Chw";   // Ваш публичный ключ
+    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";  // Ваш Cloudflare Worker
+    // ===============================
 
-async function getTableData() {
-    const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
-    const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
-    const response = await fetch(proxiedApiUrl);
-    if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
-    const data = await response.json();
-    if (!data.href) throw new Error("Нет ссылки на скачивание");
-    
-    const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
-    const fileResponse = await fetch(proxiedFileUrl);
-    if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
-    const blob = await fileResponse.blob();
-    return await readExcelFromBlob(blob);
-}
+    let currentInstruments = [];
+
+    async function getTableData() {
+        // 1. Запрашиваем ссылку на скачивание через прокси
+        const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
+        const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
+        console.log("1. Запрос API через прокси:", proxiedApiUrl);
+        
+        const response = await fetch(proxiedApiUrl);
+        if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
+        const data = await response.json();
+        if (!data.href) throw new Error("Нет ссылки на скачивание");
+        
+        // 2. Скачиваем файл через тот же прокси
+        const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
+        console.log("2. Загрузка файла через прокси:", proxiedFileUrl);
+        const fileResponse = await fetch(proxiedFileUrl);
+        if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
+        const blob = await fileResponse.blob();
+        if (blob.size < 100) throw new Error("Скачан пустой файл");
+        
+        // 3. Читаем Excel
+        return await readExcelFromBlob(blob);
+    }
 
     function readExcelFromBlob(blob) {
         return new Promise((resolve, reject) => {
@@ -119,53 +128,6 @@ async function getTableData() {
         const today = new Date().toISOString().slice(0,10);
         return validUntil < today ? 'просрочен' : 'годен';
     }
-
-    // ========== СОХРАНЕНИЕ НА ЯНДЕКС.ДИСК ==========
-    async function saveInstrumentsToYandex() {
-        if (!YANDEX_OAUTH_TOKEN || YANDEX_OAUTH_TOKEN === "y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1") {
-            alert("❌ Сначала получите OAuth-токен в Яндексе и вставьте его в код (строка YANDEX_OAUTH_TOKEN).");
-            return;
-        }
-        try {
-            // 1. Подготовка данных (создаём Excel)
-            const wsData = currentInstruments.map(inst => [
-                inst.id, inst.name, inst.serial_number, inst.model, inst.type,
-                inst.verification_date, inst.valid_until, inst.document_url,
-                inst.taken_by, inst.taken_where, inst.taken_date
-            ]);
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Приборы");
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-
-            // 2. Получаем ссылку для загрузки (через прокси)
-            const uploadRequestUrl = `https://cloud-api.yandex.net/v1/disk/resources/upload?path=/instruments.xlsx&overwrite=true`;
-            const proxiedUploadUrl = PROXY_URL + encodeURIComponent(uploadRequestUrl);
-            console.log("Запрос на получение URL для загрузки:", proxiedUploadUrl);
-
-            const uploadResponse = await fetch(proxiedUploadUrl, {
-                method: 'GET',
-                headers: { 'Authorization': `OAuth ${YANDEX_OAUTH_TOKEN}` }
-            });
-            if (!uploadResponse.ok) throw new Error(`Не удалось получить ссылку для загрузки: ${uploadResponse.status}`);
-            const uploadData = await uploadResponse.json();
-            if (!uploadData.href) throw new Error("Ответ API не содержит ссылки для загрузки");
-
-            // 3. Загружаем файл методом PUT
-            const uploadFileResponse = await fetch(PROXY_URL + encodeURIComponent(uploadData.href), {
-                method: 'PUT',
-                body: wbout,
-                headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
-            });
-            if (!uploadFileResponse.ok) throw new Error(`Ошибка при загрузке файла: ${uploadFileResponse.status}`);
-
-            alert("✅ Данные успешно сохранены на Яндекс.Диск!");
-        } catch (err) {
-            console.error(err);
-            alert("❌ Ошибка сохранения: " + err.message);
-        }
-    }
-    // ================================================
 
     function showModal(title, content) {
         let modal = document.getElementById('customModal');
@@ -271,8 +233,6 @@ async function getTableData() {
     function renderList() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         let html = '<div class="card"><h1>Оборудование</h1>';
-        // Кнопка сохранения на Диск
-        html += `<div class="button-group"><button class="btn btn-save" onclick="saveInstrumentsToYandex()">💾 Сохранить на Диск</button></div>`;
         for (const inst of currentInstruments) {
             const status = getStatus(inst.valid_until);
             const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
