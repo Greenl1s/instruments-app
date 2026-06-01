@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Учёт приборов</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -44,34 +44,33 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
-    // ========== НАСТРОЙКИ ==========
-    // ВАШ ПУБЛИЧНЫЙ КЛЮЧ (из ссылки на таблицу Яндекс.Диска)
-    const PUBLIC_KEY = "uJh4LJh2vH0Chw";
-    
-    // ВАШ ЛИЧНЫЙ ПРОКСИ НА CLOUDFLARE WORKERS
-    const PROXY_URL = "https://autumn-queen-abbie.kirik7061.workers.dev/?url=";
-    // ===============================
+    // ========== НАСТРОЙКИ (ЗАМЕНИТЕ НА ВАШИ) ==========
+    const PUBLIC_KEY = "uJh4LJh2vH0Chw";       // Ваш ключ из ссылки Яндекс.Диска
+    const PROXY_URL = "https://autumn-queen-abbie.kirik7061.workers.dev/?url=";  // Адрес вашего Worker
+    // =================================================
 
     let currentInstruments = [];
 
     async function getTableData() {
+        // 1. Получаем ссылку на скачивание через API Яндекс.Диска (через прокси)
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
-        
-        console.log("1. Запрос к API через прокси:", proxiedApiUrl);
+        console.log("1. Запрос API через прокси:", proxiedApiUrl);
         
         const response = await fetch(proxiedApiUrl);
         if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
         const data = await response.json();
         if (!data.href) throw new Error("Нет ссылки на скачивание");
         
+        // 2. Скачиваем файл через тот же прокси
         const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
-        console.log("2. Загрузка файла через прокси:", proxiedFileUrl);
+        console.log("2. Скачивание файла через прокси:", proxiedFileUrl);
         
         const fileResponse = await fetch(proxiedFileUrl);
         if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
         const blob = await fileResponse.blob();
         
+        // 3. Читаем Excel
         return await readExcelFromBlob(blob);
     }
 
@@ -260,7 +259,7 @@
             currentInstruments = await getTableData();
             renderApp();
         } catch(e) {
-            document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте, что таблица опубликована и ключ правильный.</div>`;
+            document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте публичный доступ к таблице и ключ.</div>`;
             console.error(e);
         }
     })();
