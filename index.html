@@ -238,6 +238,7 @@
             const status = getStatus(inst.valid_until);
             const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
             const takenIcon = inst.taken_by ? '📤' : '✅';
+            html += `<div class="button-group"><button class="btn btn-save" onclick="saveIssuesToYandex()">💾 Сохранить выдачу на Диск</button></div>`;
             html += `<a href="?id=${encodeURIComponent(inst.id)}" class="list-item">
                 <span>#${escapeHtml(inst.id)} ${escapeHtml(inst.name)}</span>
                 <span><span class="badge ${statusClass}" style="margin:0;padding:4px 10px;">${escapeHtml(status)}</span> ${takenIcon}</span>
