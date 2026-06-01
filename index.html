@@ -45,14 +45,14 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
     // ========== НАСТРОЙКИ (ЗАМЕНИТЕ НА ВАШИ) ==========
-    const PUBLIC_KEY = "uJh4LJh2vH0Chw";       // Ваш ключ из ссылки Яндекс.Диска
-    const PROXY_URL = "https://autumn-queen-abbie.kirik7061.workers.dev/?url=";  // Адрес вашего Worker
+    const PUBLIC_KEY = "uJh4LJh2vH0Chw";               // Ваш ключ
+    const PROXY_URL = "https://autumn-queen-abbie.kirik7061.workers.dev/?url=";  // Ваш Worker
     // =================================================
 
     let currentInstruments = [];
 
     async function getTableData() {
-        // 1. Получаем ссылку на скачивание через API Яндекс.Диска (через прокси)
+        // 1. Получаем ссылку на скачивание
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
         console.log("1. Запрос API через прокси:", proxiedApiUrl);
@@ -62,13 +62,17 @@
         const data = await response.json();
         if (!data.href) throw new Error("Нет ссылки на скачивание");
         
-        // 2. Скачиваем файл через тот же прокси
+        // 2. Скачиваем файл через ТОТ ЖЕ ПРОКСИ
+        // Важно: добавляем заголовок Origin для CORS
         const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
-        console.log("2. Скачивание файла через прокси:", proxiedFileUrl);
+        console.log("2. Загрузка файла через прокси:", proxiedFileUrl);
         
-        const fileResponse = await fetch(proxiedFileUrl);
+        const fileResponse = await fetch(proxiedFileUrl, {
+            headers: { 'Origin': window.location.origin }
+        });
         if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
         const blob = await fileResponse.blob();
+        if (blob.size < 100) throw new Error("Скачан пустой или повреждённый файл");
         
         // 3. Читаем Excel
         return await readExcelFromBlob(blob);
