@@ -47,33 +47,23 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
     // ========== НАСТРОЙКИ ==========
-    const PUBLIC_KEY = "uJh4LJh2vH0Chw";   // Ваш публичный ключ
-    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";  // Ваш Cloudflare Worker
-    // 🔑 СЮДА ВСТАВЬТЕ ВАШ OAuth-ТОКЕН (полученный в Яндексе)
-    const YANDEX_OAUTH_TOKEN = "y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1";
-    // ===============================
+   const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";
+const PUBLIC_KEY = "uJh4LJh2vH0Chw";
 
-    let currentInstruments = [];
-
-    async function getTableData() {
-        const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
-        const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
-        console.log("1. Запрос API через прокси:", proxiedApiUrl);
-        
-        const response = await fetch(proxiedApiUrl);
-        if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
-        const data = await response.json();
-        if (!data.href) throw new Error("Нет ссылки на скачивание");
-        
-        const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
-        console.log("2. Загрузка файла через прокси:", proxiedFileUrl);
-        const fileResponse = await fetch(proxiedFileUrl);
-        if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
-        const blob = await fileResponse.blob();
-        if (blob.size < 100) throw new Error("Скачан пустой файл");
-        
-        return await readExcelFromBlob(blob);
-    }
+async function getTableData() {
+    const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
+    const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
+    const response = await fetch(proxiedApiUrl);
+    if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
+    const data = await response.json();
+    if (!data.href) throw new Error("Нет ссылки на скачивание");
+    
+    const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
+    const fileResponse = await fetch(proxiedFileUrl);
+    if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
+    const blob = await fileResponse.blob();
+    return await readExcelFromBlob(blob);
+}
 
     function readExcelFromBlob(blob) {
         return new Promise((resolve, reject) => {
