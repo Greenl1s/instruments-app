@@ -266,8 +266,11 @@
         }
     }
 async function saveIssuesToYandex() {
-    const SECRET = 'ваш_секретный_ключ';  // тот же, что в Worker
-    const OAUTH_TOKEN = 'y0__...';        // ваш OAuth-токен с правами на запись
+    const OAUTH_TOKEN = 'y0__ваш_токен';  // вставьте ваш OAuth-токен
+    if (!OAUTH_TOKEN || OAUTH_TOKEN === 'y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1') {
+        alert("❌ Сначала получите OAuth-токен и вставьте его в код.");
+        return;
+    }
 
     try {
         // 1. Подготовить данные для Excel
@@ -280,32 +283,28 @@ async function saveIssuesToYandex() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Приборы");
         const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        // Преобразуем ArrayBuffer в base64 для передачи через JSON
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(wbout)));
+        const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
-        // 2. Получить URL для загрузки (API Яндекс.Диска)
-        const uploadUrl = `https://cloud-api.yandex.net/v1/disk/resources/upload?path=/instruments.xlsx&overwrite=true`;
-
-        // 3. Отправить запрос к Worker (PUT)
-        const response = await fetch(PROXY_URL, {  // используем тот же адрес Worker
+        // 2. Отправить файл через PUT на Worker
+        // Используем тот же PROXY_URL, но метод PUT (без параметра url)
+        const response = await fetch(PROXY_URL.replace('/?url=', ''), {  // убираем `/?url=`, если он есть
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json',
-                'X-Write-Secret': SECRET,
-                'Authorization': `OAuth ${OAUTH_TOKEN}`
+                'Authorization': `OAuth ${OAUTH_TOKEN}`,
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             },
-            body: JSON.stringify({
-                targetUrl: uploadUrl,
-                fileData: base64
-            })
+            body: blob
         });
 
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Ошибка сохранения');
-        alert('✅ Данные о выдаче сохранены на Яндекс.Диск!');
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || `HTTP ${response.status}`);
+        }
+
+        alert("✅ Данные успешно сохранены на Яндекс.Диск!");
     } catch (err) {
         console.error(err);
-        alert('❌ Ошибка сохранения: ' + err.message);
+        alert("❌ Ошибка сохранения: " + err.message);
     }
 }
     (async () => {
