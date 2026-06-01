@@ -264,7 +264,49 @@
             appDiv.innerHTML = renderList();
         }
     }
+async function saveIssuesToYandex() {
+    const SECRET = 'ваш_секретный_ключ';  // тот же, что в Worker
+    const OAUTH_TOKEN = 'y0__...';        // ваш OAuth-токен с правами на запись
 
+    try {
+        // 1. Подготовить данные для Excel
+        const wsData = currentInstruments.map(inst => [
+            inst.id, inst.name, inst.serial_number, inst.model, inst.type,
+            inst.verification_date, inst.valid_until, inst.document_url,
+            inst.taken_by, inst.taken_where, inst.taken_date
+        ]);
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Приборы");
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        // Преобразуем ArrayBuffer в base64 для передачи через JSON
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(wbout)));
+
+        // 2. Получить URL для загрузки (API Яндекс.Диска)
+        const uploadUrl = `https://cloud-api.yandex.net/v1/disk/resources/upload?path=/instruments.xlsx&overwrite=true`;
+
+        // 3. Отправить запрос к Worker (PUT)
+        const response = await fetch(PROXY_URL, {  // используем тот же адрес Worker
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Write-Secret': SECRET,
+                'Authorization': `OAuth ${OAUTH_TOKEN}`
+            },
+            body: JSON.stringify({
+                targetUrl: uploadUrl,
+                fileData: base64
+            })
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Ошибка сохранения');
+        alert('✅ Данные о выдаче сохранены на Яндекс.Диск!');
+    } catch (err) {
+        console.error(err);
+        alert('❌ Ошибка сохранения: ' + err.message);
+    }
+}
     (async () => {
         try {
             currentInstruments = await getTableData();
