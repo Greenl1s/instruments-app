@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Учёт приборов</title>
     <style>
+        /* Стили (оставляем как есть, они не влияют на логику) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
@@ -44,15 +45,15 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
-    // ========== НАСТРОЙКИ ==========
-    const PUBLIC_KEY = "gDNwVLXHQu9Xww";   // Ваш публичный ключ
-    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";  // Ваш Cloudflare Worker
-    // ===============================
+    // ========== НАСТРОЙКИ (ЗАМЕНИТЕ НА ВАШИ) ==========
+    const PUBLIC_KEY = "gDNwVLXHQu9Xww";        // Ваш публичный ключ (или новый)
+    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";  // Адрес вашего Worker
+    // =================================================
 
     let currentInstruments = [];
 
     async function getTableData() {
-        // 1. Запрашиваем ссылку на скачивание через прокси
+        // 1. Получаем ссылку на скачивание через прокси
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
         console.log("1. Запрос API через прокси:", proxiedApiUrl);
@@ -62,7 +63,7 @@
         const data = await response.json();
         if (!data.href) throw new Error("Нет ссылки на скачивание");
         
-        // 2. Скачиваем файл через тот же прокси
+        // 2. Скачиваем файл через прокси
         const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
         console.log("2. Загрузка файла через прокси:", proxiedFileUrl);
         const fileResponse = await fetch(proxiedFileUrl);
