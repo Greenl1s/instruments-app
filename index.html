@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Учёт приборов</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -22,7 +22,6 @@
         .btn-edit { background: #eab308; color: #1e293b; }
         .btn-clear { background: #64748b; }
         .btn-qr { background: #8b5cf6; }
-        .btn-save { background: #10b981; }
         .btn-small { padding: 8px 16px; font-size: 13px; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
@@ -46,29 +45,32 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
     // ========== НАСТРОЙКИ ==========
-    // ВСТАВЬТЕ ВАШ ПУБЛИЧНЫЙ КЛЮЧ (после /i/ в ссылке)
-    const PUBLIC_KEY = "uJh4LJh2vH0Chw";
-    // Используем публичный прокси corsproxy.io
-    const PROXY_URL = "https://corsproxy.io/?url=";
+    const PUBLIC_KEY = "uJh4LJh2vH0Chw";   // Ваш публичный ключ
+    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";  // Ваш Cloudflare Worker
     // ===============================
 
     let currentInstruments = [];
 
     async function getTableData() {
+        // 1. Запрашиваем ссылку на скачивание через прокси
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
-        console.log("Запрос API через прокси:", proxiedApiUrl);
+        console.log("1. Запрос API через прокси:", proxiedApiUrl);
         
         const response = await fetch(proxiedApiUrl);
         if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
         const data = await response.json();
         if (!data.href) throw new Error("Нет ссылки на скачивание");
         
+        // 2. Скачиваем файл через тот же прокси
         const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
-        console.log("Загрузка файла через прокси:", proxiedFileUrl);
+        console.log("2. Загрузка файла через прокси:", proxiedFileUrl);
         const fileResponse = await fetch(proxiedFileUrl);
         if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
         const blob = await fileResponse.blob();
+        if (blob.size < 100) throw new Error("Скачан пустой файл");
+        
+        // 3. Читаем Excel
         return await readExcelFromBlob(blob);
     }
 
@@ -127,16 +129,147 @@
         return validUntil < today ? 'просрочен' : 'годен';
     }
 
-    // Остальные функции (showModal, showQRModal, showEditForm, escapeHtml, renderCard, renderList, renderApp) такие же, как в вашем коде.
-    // Для краткости я их не повторяю, но вы должны скопировать их из вашего предыдущего рабочего файла.
-    // Если у вас нет полной версии, напишите, я дам полный код.
+    function showModal(title, content) {
+        let modal = document.getElementById('customModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'customModal';
+            modal.className = 'modal';
+            modal.innerHTML = `<div class="modal-content"><h3 id="modalTitle"></h3><div id="modalBody"></div><button class="btn btn-small" id="modalCloseBtn">Закрыть</button></div>`;
+            document.body.appendChild(modal);
+            document.getElementById('modalCloseBtn').onclick = () => modal.style.display = 'none';
+        }
+        document.getElementById('modalTitle').innerText = title;
+        document.getElementById('modalBody').innerHTML = content;
+        modal.style.display = 'flex';
+    }
+
+    function showQRModal(instrument) {
+        const currentUrl = window.location.href.split('?')[0];
+        const cardUrl = `${currentUrl}?id=${encodeURIComponent(instrument.id)}`;
+        const content = `<div class="qr-container"><p><strong>${escapeHtml(instrument.name)}</strong></p><div id="qr-code"></div><button class="btn btn-small" id="downloadQR">Скачать QR</button></div>`;
+        showModal(`QR-код #${instrument.id}`, content);
+        setTimeout(() => {
+            new QRCode(document.getElementById("qr-code"), { text: cardUrl, width: 200, height: 200 });
+            document.getElementById('downloadQR').onclick = () => {
+                const canvas = document.querySelector('#qr-code canvas');
+                if (canvas) {
+                    const link = document.createElement('a');
+                    link.download = `QR_${instrument.id}.png`;
+                    link.href = canvas.toDataURL();
+                    link.click();
+                }
+            };
+        }, 100);
+    }
+
+    function showEditForm(instrument) {
+        const today = new Date().toISOString().slice(0,10);
+        const formHtml = `
+            <div class="form-group"><label>ФИО сотрудника</label><input type="text" id="takenBy" value="${escapeHtml(instrument.taken_by)}"></div>
+            <div class="form-group"><label>Куда взял</label><input type="text" id="takenWhere" value="${escapeHtml(instrument.taken_where)}"></div>
+            <div class="form-group"><label>Дата выдачи</label><input type="date" id="takenDate" value="${instrument.taken_date || today}"></div>
+            <button class="btn btn-edit" id="saveBtn">Сохранить</button>
+            <button class="btn btn-clear" id="clearBtn">Очистить</button>
+        `;
+        showModal(`Выдача: ${escapeHtml(instrument.name)}`, formHtml);
+        document.getElementById('saveBtn').onclick = () => {
+            instrument.taken_by = document.getElementById('takenBy').value;
+            instrument.taken_where = document.getElementById('takenWhere').value;
+            instrument.taken_date = document.getElementById('takenDate').value;
+            document.getElementById('customModal').style.display = 'none';
+            renderApp();
+        };
+        document.getElementById('clearBtn').onclick = () => {
+            instrument.taken_by = '';
+            instrument.taken_where = '';
+            instrument.taken_date = '';
+            document.getElementById('customModal').style.display = 'none';
+            renderApp();
+        };
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    function renderCard(inst) {
+        const status = getStatus(inst.valid_until);
+        const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
+        const hasTaken = inst.taken_by && inst.taken_by.trim() !== '';
+        const takenHtml = hasTaken ? `
+            <div class="issued-info">
+                <div class="field"><div class="field-label">Кто взял</div><div class="field-value">${escapeHtml(inst.taken_by)}</div></div>
+                <div class="field"><div class="field-label">Куда взял</div><div class="field-value">${escapeHtml(inst.taken_where) || '—'}</div></div>
+                <div class="field"><div class="field-label">Дата выдачи</div><div class="field-value">${escapeHtml(inst.taken_date) || '—'}</div></div>
+            </div>
+        ` : '';
+        const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">📄 Открыть документ</a>` : '—';
+        return `
+        <div class="card">
+            <div class="title">${escapeHtml(inst.name)}</div>
+            <div class="badge ${statusClass}">${escapeHtml(status)}</div>
+            <div class="field"><div class="field-label">Серийный номер</div><div class="field-value">${escapeHtml(inst.serial_number) || '—'}</div></div>
+            <div class="field"><div class="field-label">Модель</div><div class="field-value">${escapeHtml(inst.model) || '—'}</div></div>
+            <div class="field"><div class="field-label">Тип</div><div class="field-value">${escapeHtml(inst.type) || '—'}</div></div>
+            <div class="field"><div class="field-label">Дата поверки</div><div class="field-value">${escapeHtml(inst.verification_date) || '—'}</div></div>
+            <div class="field"><div class="field-label">Действителен до</div><div class="field-value">${escapeHtml(inst.valid_until) || '—'}</div></div>
+            <div class="field"><div class="field-label">Документ</div><div class="field-value">${docLink}</div></div>
+            ${takenHtml}
+            <div class="button-group">
+                <button class="btn btn-edit" onclick="showEditForm(currentInstrument)">${hasTaken ? 'Редактировать выдачу' : 'Выдать прибор'}</button>
+                <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">QR-код</button>
+                <a href="?" class="btn btn-clear">К списку</a>
+            </div>
+        </div>`;
+    }
+
+    function renderList() {
+        if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
+        let html = '<div class="card"><h1>Оборудование</h1>';
+        for (const inst of currentInstruments) {
+            const status = getStatus(inst.valid_until);
+            const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
+            const takenIcon = inst.taken_by ? '📤' : '✅';
+            html += `<a href="?id=${encodeURIComponent(inst.id)}" class="list-item">
+                <span>#${escapeHtml(inst.id)} ${escapeHtml(inst.name)}</span>
+                <span><span class="badge ${statusClass}" style="margin:0;padding:4px 10px;">${escapeHtml(status)}</span> ${takenIcon}</span>
+            </a>`;
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function renderApp() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        const appDiv = document.getElementById('app');
+        if (!appDiv) return;
+        if (id) {
+            const inst = currentInstruments.find(i => String(i.id) === id);
+            if (inst) {
+                window.currentInstrument = inst;
+                appDiv.innerHTML = renderCard(inst);
+            } else {
+                appDiv.innerHTML = `<div class="error">Прибор не найден<br><a href="?" style="color:#2563eb;">← Назад</a></div>`;
+            }
+        } else {
+            appDiv.innerHTML = renderList();
+        }
+    }
 
     (async () => {
         try {
             currentInstruments = await getTableData();
             renderApp();
         } catch(e) {
-            document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте публичный доступ к таблице и ключ.</div>`;
+            document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте прокси и публичный ключ.</div>`;
             console.error(e);
         }
     })();
