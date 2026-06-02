@@ -296,9 +296,22 @@
     }
 
    async function saveInstrumentsToYandex() {
-    const WRITE_SECRET = 'mySecretKey123';  // ДОЛЖЕН СОВПАДАТЬ С ТЕМ, ЧТО В WORKER
+    const WRITE_SECRET = 'mySecretKey123';  // ДОЛЖЕН СОВПАДАТЬ С КЛЮЧОМ В WORKER
+    const proxyBase = PROXY_URL.split('?')[0]; // получаем базовый адрес Worker (без ?url=)
     try {
-        // 1. Подготовить данные для Excel
+        // 1. Получить ссылку для загрузки через Worker
+        const uploadUrlResp = await fetch(`${proxyBase}?get_upload_url=1`, {
+            method: 'GET',
+            headers: { 'X-Write-Secret': WRITE_SECRET }
+        });
+        if (!uploadUrlResp.ok) {
+            const errData = await uploadUrlResp.json();
+            throw new Error(errData.error || `HTTP ${uploadUrlResp.status}`);
+        }
+        const { href } = await uploadUrlResp.json();
+        if (!href) throw new Error('Не удалось получить ссылку для загрузки');
+
+        // 2. Подготовить Excel-файл
         const wsData = currentInstruments.map(inst => [
             inst.id, inst.name, inst.serial_number, inst.model, inst.type,
             inst.verification_date, inst.valid_until, inst.document_url,
@@ -310,23 +323,15 @@
         const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
-        // 2. Отправить файл через PUT на Worker (без OAuth-токена, только секретный ключ)
-        const proxyBase = PROXY_URL.split('?')[0];  // убираем `/?url=` для PUT
-        const response = await fetch(proxyBase, {
+        // 3. Отправить файл напрямую (минуя прокси, CORS не помеха)
+        const putResp = await fetch(href, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'X-Write-Secret': WRITE_SECRET
-            },
-            body: blob
+            body: blob,
+            headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
         });
+        if (!putResp.ok) throw new Error(`Ошибка загрузки: ${putResp.status}`);
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || `HTTP ${response.status}`);
-        }
-
-        showMessage("✅ Данные сохранены на Яндекс.Диск!");
+        showMessage("✅ Данные успешно сохранены на Яндекс.Диск!");
         return true;
     } catch (err) {
         console.error(err);
