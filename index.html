@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Учёт приборов</title>
     <style>
-        /* Стили (полностью сохранены) */
+        /* Стили полностью сохранены, добавлен класс для индикатора сохранения */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
@@ -27,9 +27,9 @@
         .btn-small { padding: 8px 16px; font-size: 13px; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
-        .form-group input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
         .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; border-radius: 24px; padding: 24px; max-width: 400px; width: 90%; margin: 20px; text-align: center; }
+        .modal-content { background: white; border-radius: 24px; padding: 24px; max-width: 500px; width: 90%; margin: 20px; max-height: 90vh; overflow-y: auto; text-align: left; }
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border-bottom: 1px solid #e2e8f0; text-decoration: none; color: #1e293b; }
         .list-item:hover { background: #f8fafc; }
         .loading, .error { text-align: center; padding: 40px; color: #64748b; }
@@ -38,6 +38,7 @@
         .button-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
         .issued-info { background: #fef3c7; padding: 12px; border-radius: 12px; margin-top: 10px; }
         .qr-container canvas { margin: 10px auto; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px; background: white; }
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1100; }
     </style>
 </head>
 <body>
@@ -46,30 +47,36 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
-    // ========== НАСТРОЙКИ (ЗАМЕНИТЕ НА ВАШИ) ==========
+    // ========== НАСТРОЙКИ ==========
     const PUBLIC_KEY = "gDNwVLXHQu9Xww";        // Ваш публичный ключ
     const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";  // Адрес вашего Worker
-    // =================================================
+    const OAUTH_TOKEN = 'y0__ваш_токен';  // ЗАМЕНИТЕ НА ВАШ OAuth-токен (для сохранения)
+    // =================================
 
     let currentInstruments = [];
+
+    // Вспомогательная функция показа уведомлений
+    function showMessage(msg, isError = false) {
+        let toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = msg;
+        toast.style.background = isError ? '#e74c3c' : '#2ecc71';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
 
     async function getTableData() {
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
-        console.log("1. Запрос API через прокси:", proxiedApiUrl);
-        
         const response = await fetch(proxiedApiUrl);
         if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
         const data = await response.json();
         if (!data.href) throw new Error("Нет ссылки на скачивание");
-        
         const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
-        console.log("2. Загрузка файла через прокси:", proxiedFileUrl);
         const fileResponse = await fetch(proxiedFileUrl);
         if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
         const blob = await fileResponse.blob();
         if (blob.size < 100) throw new Error("Скачан пустой файл");
-        
         return await readExcelFromBlob(blob);
     }
 
@@ -162,12 +169,63 @@
         }, 100);
     }
 
-    // Функция для очистки выдачи (положить прибор)
+    // Полноценная форма редактирования всех полей прибора
+    function showEditAllForm(instrument) {
+        const today = new Date().toISOString().slice(0,10);
+        const formHtml = `
+            <div class="form-group"><label>Название прибора</label><input type="text" id="edit_name" value="${escapeHtml(instrument.name)}"></div>
+            <div class="form-group"><label>Серийный номер</label><input type="text" id="edit_serial" value="${escapeHtml(instrument.serial_number)}"></div>
+            <div class="form-group"><label>Модель</label><input type="text" id="edit_model" value="${escapeHtml(instrument.model)}"></div>
+            <div class="form-group"><label>Тип документа</label><input type="text" id="edit_type" value="${escapeHtml(instrument.type)}"></div>
+            <div class="form-group"><label>Дата поверки</label><input type="date" id="edit_verif" value="${instrument.verification_date || ''}"></div>
+            <div class="form-group"><label>Действительно до</label><input type="date" id="edit_valid" value="${instrument.valid_until || ''}"></div>
+            <div class="form-group"><label>Ссылка на документ</label><input type="text" id="edit_doc" value="${escapeHtml(instrument.document_url)}"></div>
+            <div class="form-group"><label>Кто взял</label><input type="text" id="edit_taken_by" value="${escapeHtml(instrument.taken_by)}"></div>
+            <div class="form-group"><label>Куда взял</label><input type="text" id="edit_taken_where" value="${escapeHtml(instrument.taken_where)}"></div>
+            <div class="form-group"><label>Дата выдачи</label><input type="date" id="edit_taken_date" value="${instrument.taken_date || ''}"></div>
+            <div class="button-group">
+                <button class="btn btn-edit" id="saveAllBtn">💾 Сохранить изменения</button>
+                <button class="btn btn-clear" id="cancelAllBtn">Отмена</button>
+            </div>
+        `;
+        showModal(`Редактирование прибора #${instrument.id}`, formHtml);
+        document.getElementById('saveAllBtn').onclick = async () => {
+            // Обновляем объект
+            instrument.name = document.getElementById('edit_name').value;
+            instrument.serial_number = document.getElementById('edit_serial').value;
+            instrument.model = document.getElementById('edit_model').value;
+            instrument.type = document.getElementById('edit_type').value;
+            instrument.verification_date = document.getElementById('edit_verif').value;
+            instrument.valid_until = document.getElementById('edit_valid').value;
+            instrument.document_url = document.getElementById('edit_doc').value;
+            instrument.taken_by = document.getElementById('edit_taken_by').value;
+            instrument.taken_where = document.getElementById('edit_taken_where').value;
+            instrument.taken_date = document.getElementById('edit_taken_date').value;
+            
+            document.getElementById('customModal').style.display = 'none';
+            renderApp(); // обновляем отображение карточки/списка
+            
+            // Автоматически сохраняем на Яндекс.Диск
+            showMessage("Сохраняем изменения на Диск...");
+            try {
+                await saveInstrumentsToYandex();
+                showMessage("✅ Изменения сохранены на Яндекс.Диск!");
+            } catch (e) {
+                showMessage("❌ Ошибка сохранения: " + e.message, true);
+            }
+        };
+        document.getElementById('cancelAllBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+    }
+
     function clearIssue(instrument) {
         instrument.taken_by = '';
         instrument.taken_where = '';
         instrument.taken_date = '';
-        renderApp(); // обновляем отображение
+        renderApp();
+        // Сохраняем изменения на Диск
+        saveInstrumentsToYandex().catch(e => showMessage("Ошибка сохранения: " + e.message, true));
     }
 
     function showEditForm(instrument) {
@@ -186,6 +244,7 @@
             instrument.taken_date = document.getElementById('takenDate').value;
             document.getElementById('customModal').style.display = 'none';
             renderApp();
+            saveInstrumentsToYandex().catch(e => showMessage("Ошибка сохранения: " + e.message, true));
         };
         document.getElementById('clearBtn').onclick = () => {
             clearIssue(instrument);
@@ -229,51 +288,46 @@
             <div class="button-group">
                 <button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>
                 <button class="btn btn-clear" onclick="clearIssue(currentInstrument)">📦 Положить прибор</button>
+                <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
                 <a href="?" class="btn btn-clear">← К списку</a>
             </div>
         </div>`;
     }
 
-    async function saveIssuesToYandex() {
-        const OAUTH_TOKEN = 'y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1';  // ЗАМЕНИТЕ НА ВАШ ТОКЕН
+    async function saveInstrumentsToYandex() {
         if (!OAUTH_TOKEN || OAUTH_TOKEN === 'y0__ваш_токен') {
-            alert("❌ Сначала получите OAuth-токен и вставьте его в код.");
-            return;
+            throw new Error("OAuth-токен не задан");
         }
-        try {
-            const wsData = currentInstruments.map(inst => [
-                inst.id, inst.name, inst.serial_number, inst.model, inst.type,
-                inst.verification_date, inst.valid_until, inst.document_url,
-                inst.taken_by, inst.taken_where, inst.taken_date
-            ]);
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Приборы");
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const proxyBase = PROXY_URL.split('?')[0];
-            const response = await fetch(proxyBase, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `OAuth ${OAUTH_TOKEN}`,
-                    'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                },
-                body: blob
-            });
-            if (!response.ok) throw new Error(await response.text() || `HTTP ${response.status}`);
-            alert("✅ Данные успешно сохранены на Яндекс.Диск!");
-        } catch (err) {
-            console.error(err);
-            alert("❌ Ошибка сохранения: " + err.message);
+        const wsData = currentInstruments.map(inst => [
+            inst.id, inst.name, inst.serial_number, inst.model, inst.type,
+            inst.verification_date, inst.valid_until, inst.document_url,
+            inst.taken_by, inst.taken_where, inst.taken_date
+        ]);
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Приборы");
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const proxyBase = PROXY_URL.split('?')[0];
+        const response = await fetch(proxyBase, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `OAuth ${OAUTH_TOKEN}`,
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            },
+            body: blob
+        });
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(errText || `HTTP ${response.status}`);
         }
     }
 
     function renderList() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         let html = '<div class="card"><h1>Оборудование</h1>';
-        // Кнопка сохранения на диск (одна на весь список)
-        html += `<div class="button-group"><button class="btn btn-save" onclick="saveIssuesToYandex()">💾 Сохранить выдачу на Диск</button></div>`;
+        html += `<div class="button-group"><button class="btn btn-save" onclick="saveInstrumentsToYandex().then(()=>showMessage('✅ Сохранено!')).catch(e=>showMessage('Ошибка: '+e.message,true))">💾 Сохранить все изменения на Диск</button></div>`;
         for (const inst of currentInstruments) {
             const status = getStatus(inst.valid_until);
             const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
