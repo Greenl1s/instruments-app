@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Учёт приборов</title>
     <style>
-        /* Стили (полностью сохранены) */
+        /* ваши стили (можно оставить как есть, они не меняются) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
@@ -54,9 +54,7 @@
     // =================================================
 
     let currentInstruments = [];
-    let dirtyItems = new Map(); // { id: { изменённые поля } }
 
-    // Вспомогательная функция уведомлений
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
         toast.className = 'toast';
@@ -66,7 +64,6 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    // Загрузка данных (как и раньше)
     async function getTableData() {
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
@@ -137,7 +134,6 @@
         return validUntil < today ? 'просрочен' : 'годен';
     }
 
-    // Модальное окно (без изменений)
     function showModal(title, content) {
         let modal = document.getElementById('customModal');
         if (!modal) {
@@ -172,38 +168,42 @@
         }, 100);
     }
 
-    // Функция для сохранения изменений на Диск (только dirtyItems)
-    async function saveDirtyToYandex() {
-        if (dirtyItems.size === 0) {
-            showMessage("Нет изменений для сохранения.");
-            return;
-        }
-        const updates = Array.from(dirtyItems.entries()).map(([id, data]) => ({ id, data }));
-        const proxyBase = PROXY_URL.split('?')[0];
+    // Полная перезапись файла на Яндекс.Диск
+    async function saveInstrumentsToYandex() {
         try {
+            // 1. Подготовить Excel
+            const wsData = currentInstruments.map(inst => [
+                inst.id, inst.name, inst.serial_number, inst.model, inst.type,
+                inst.verification_date, inst.valid_until, inst.document_url,
+                inst.taken_by, inst.taken_where, inst.taken_date
+            ]);
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Приборы");
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+            // 2. Отправить через PUT на Worker
+            const proxyBase = PROXY_URL.split('?')[0];
             const response = await fetch(proxyBase, {
-                method: 'PATCH',
+                method: 'PUT',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     'X-Write-Secret': WRITE_SECRET
                 },
-                body: JSON.stringify(updates)
+                body: blob
             });
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.error || `HTTP ${response.status}`);
             }
-            dirtyItems.clear();
-            showMessage("✅ Изменения сохранены на Яндекс.Диск!");
-            // Опционально: перечитать данные с Диска для синхронизации
-            currentInstruments = await getTableData();
-            renderApp();
+            showMessage("✅ Все данные сохранены на Яндекс.Диск!");
         } catch (err) {
             showMessage("❌ Ошибка сохранения: " + err.message, true);
         }
     }
 
-    // Редактирование всех полей (с добавлением в dirtyItems)
+    // Редактирование всех полей
     function showEditAllForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
@@ -217,41 +217,21 @@
             <div class="form-group"><label>Кто взял</label><input type="text" id="edit_taken_by" value="${escapeHtml(instrument.taken_by)}"></div>
             <div class="form-group"><label>Куда взял</label><input type="text" id="edit_taken_where" value="${escapeHtml(instrument.taken_where)}"></div>
             <div class="form-group"><label>Дата выдачи</label><input type="date" id="edit_taken_date" value="${instrument.taken_date || ''}"></div>
-            <div class="button-group">
-                <button class="btn btn-edit" id="saveAllBtn">💾 Сохранить изменения</button>
-                <button class="btn btn-clear" id="cancelAllBtn">Отмена</button>
-            </div>
+            <button class="btn btn-edit" id="saveAllBtn">Сохранить изменения</button>
+            <button class="btn btn-clear" id="cancelAllBtn">Отмена</button>
         `;
-        showModal(`Редактирование прибора #${instrument.id}`, formHtml);
+        showModal(`Редактирование #${instrument.id}`, formHtml);
         document.getElementById('saveAllBtn').onclick = () => {
-            // Собираем изменения
-            const changedData = {};
-            const newName = document.getElementById('edit_name').value;
-            if (newName !== instrument.name) changedData.name = newName;
-            const newSerial = document.getElementById('edit_serial').value;
-            if (newSerial !== instrument.serial_number) changedData.serial_number = newSerial;
-            const newModel = document.getElementById('edit_model').value;
-            if (newModel !== instrument.model) changedData.model = newModel;
-            const newType = document.getElementById('edit_type').value;
-            if (newType !== instrument.type) changedData.type = newType;
-            const newVerif = document.getElementById('edit_verif').value;
-            if (newVerif !== instrument.verification_date) changedData.verification_date = newVerif;
-            const newValid = document.getElementById('edit_valid').value;
-            if (newValid !== instrument.valid_until) changedData.valid_until = newValid;
-            const newDoc = document.getElementById('edit_doc').value;
-            if (newDoc !== instrument.document_url) changedData.document_url = newDoc;
-            const newTakenBy = document.getElementById('edit_taken_by').value;
-            if (newTakenBy !== instrument.taken_by) changedData.taken_by = newTakenBy;
-            const newTakenWhere = document.getElementById('edit_taken_where').value;
-            if (newTakenWhere !== instrument.taken_where) changedData.taken_where = newTakenWhere;
-            const newTakenDate = document.getElementById('edit_taken_date').value;
-            if (newTakenDate !== instrument.taken_date) changedData.taken_date = newTakenDate;
-
-            if (Object.keys(changedData).length > 0) {
-                dirtyItems.set(instrument.id, { ...(dirtyItems.get(instrument.id) || {}), ...changedData });
-                // Применяем изменения к объекту в памяти
-                Object.assign(instrument, changedData);
-            }
+            instrument.name = document.getElementById('edit_name').value;
+            instrument.serial_number = document.getElementById('edit_serial').value;
+            instrument.model = document.getElementById('edit_model').value;
+            instrument.type = document.getElementById('edit_type').value;
+            instrument.verification_date = document.getElementById('edit_verif').value;
+            instrument.valid_until = document.getElementById('edit_valid').value;
+            instrument.document_url = document.getElementById('edit_doc').value;
+            instrument.taken_by = document.getElementById('edit_taken_by').value;
+            instrument.taken_where = document.getElementById('edit_taken_where').value;
+            instrument.taken_date = document.getElementById('edit_taken_date').value;
             document.getElementById('customModal').style.display = 'none';
             renderApp();
         };
@@ -260,7 +240,6 @@
         };
     }
 
-    // Выдача прибора (только taken_by, taken_where, taken_date)
     function showEditForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
@@ -272,24 +251,16 @@
         `;
         showModal(`Взять прибор: ${escapeHtml(instrument.name)}`, formHtml);
         document.getElementById('saveBtn').onclick = () => {
-            const changedData = {};
-            const newTakenBy = document.getElementById('takenBy').value;
-            if (newTakenBy !== instrument.taken_by) changedData.taken_by = newTakenBy;
-            const newTakenWhere = document.getElementById('takenWhere').value;
-            if (newTakenWhere !== instrument.taken_where) changedData.taken_where = newTakenWhere;
-            const newTakenDate = document.getElementById('takenDate').value;
-            if (newTakenDate !== instrument.taken_date) changedData.taken_date = newTakenDate;
-            if (Object.keys(changedData).length > 0) {
-                dirtyItems.set(instrument.id, { ...(dirtyItems.get(instrument.id) || {}), ...changedData });
-                Object.assign(instrument, changedData);
-            }
+            instrument.taken_by = document.getElementById('takenBy').value;
+            instrument.taken_where = document.getElementById('takenWhere').value;
+            instrument.taken_date = document.getElementById('takenDate').value;
             document.getElementById('customModal').style.display = 'none';
             renderApp();
         };
         document.getElementById('clearBtn').onclick = () => {
-            const changedData = { taken_by: '', taken_where: '', taken_date: '' };
-            dirtyItems.set(instrument.id, { ...(dirtyItems.get(instrument.id) || {}), ...changedData });
-            Object.assign(instrument, changedData);
+            instrument.taken_by = '';
+            instrument.taken_where = '';
+            instrument.taken_date = '';
             document.getElementById('customModal').style.display = 'none';
             renderApp();
         };
@@ -330,7 +301,7 @@
             ${takenHtml}
             <div class="button-group">
                 <button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>
-                <button class="btn btn-clear" onclick="(() => { const changed = { taken_by: '', taken_where: '', taken_date: '' }; dirtyItems.set(currentInstrument.id, { ...(dirtyItems.get(currentInstrument.id) || {}), ...changed }); Object.assign(currentInstrument, changed); renderApp(); })()">📦 Положить прибор</button>
+                <button class="btn btn-clear" onclick="(() => { currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; renderApp(); })()">📦 Положить прибор</button>
                 <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
                 <a href="?" class="btn btn-clear">← К списку</a>
@@ -341,7 +312,7 @@
     function renderList() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         let html = '<div class="card"><h1>Оборудование</h1>';
-        html += `<div class="button-group"><button class="btn btn-save" onclick="saveDirtyToYandex()">💾 Сохранить изменения</button></div>`;
+        html += `<div class="button-group"><button class="btn btn-save" onclick="saveInstrumentsToYandex()">💾 Сохранить все изменения на Диск</button></div>`;
         for (const inst of currentInstruments) {
             const status = getStatus(inst.valid_until);
             const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
@@ -373,7 +344,6 @@
         }
     }
 
-    // Загрузка данных при старте
     (async () => {
         try {
             currentInstruments = await getTableData();
