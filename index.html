@@ -295,10 +295,10 @@
         </div>`;
     }
 
-    async function saveInstrumentsToYandex() {
-        if (!OAUTH_TOKEN || OAUTH_TOKEN === 'y0__токен') {
-            throw new Error("OAuth-токен не задан");
-        }
+   async function saveInstrumentsToYandex() {
+    const WRITE_SECRET = 'mySecretKey123';  // ДОЛЖЕН СОВПАДАТЬ С ТЕМ, ЧТО В WORKER
+    try {
+        // 1. Подготовить данные для Excel
         const wsData = currentInstruments.map(inst => [
             inst.id, inst.name, inst.serial_number, inst.model, inst.type,
             inst.verification_date, inst.valid_until, inst.document_url,
@@ -309,20 +309,31 @@
         XLSX.utils.book_append_sheet(wb, ws, "Приборы");
         const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const proxyBase = PROXY_URL.split('?')[0];
+
+        // 2. Отправить файл через PUT на Worker (без OAuth-токена, только секретный ключ)
+        const proxyBase = PROXY_URL.split('?')[0];  // убираем `/?url=` для PUT
         const response = await fetch(proxyBase, {
             method: 'PUT',
             headers: {
-                'Authorization': `OAuth ${OAUTH_TOKEN}`,
-                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'X-Write-Secret': WRITE_SECRET
             },
             body: blob
         });
+
         if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(errText || `HTTP ${response.status}`);
+            const errorText = await response.text();
+            throw new Error(errorText || `HTTP ${response.status}`);
         }
+
+        showMessage("✅ Данные сохранены на Яндекс.Диск!");
+        return true;
+    } catch (err) {
+        console.error(err);
+        showMessage("❌ Ошибка сохранения: " + err.message, true);
+        throw err;
     }
+}
 
     function renderList() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
