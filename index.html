@@ -51,6 +51,7 @@
     const PUBLIC_KEY = "ciFZRWIX5aqjNg";                     // Ваш публичный ключ
     const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url="; // Адрес Worker
     const WRITE_SECRET = "mySecretKey123";                   // Секретный ключ (совпадает с Worker)
+    const OAUTH_TOKEN = "y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1";         // ваш OAuth-токен
     // ====================================================
 
     let currentInstruments = [];
@@ -183,31 +184,28 @@
     }
 
     async function saveInstrumentsToYandex() {
-        try {
-            showMessage("Сохраняем...");
-            const uploadHref = await getUploadHref();
-            const wsData = currentInstruments.map(inst => [
-                inst.id, inst.name, inst.serial_number, inst.model, inst.type,
-                inst.verification_date, inst.valid_until, inst.document_url,
-                inst.taken_by, inst.taken_where, inst.taken_date
-            ]);
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Приборы");
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const putResponse = await fetch(uploadHref, {
-                method: 'PUT',
-                body: blob,
-                headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
-            });
-            if (!putResponse.ok) throw new Error(`Ошибка загрузки: ${putResponse.status}`);
-            showMessage("✅ Данные сохранены на Яндекс.Диск!");
-        } catch (err) {
-            console.error(err);
-            showMessage("❌ Ошибка сохранения: " + err.message, true);
-        }
+    if (!OAUTH_TOKEN || OAUTH_TOKEN === 'y0__ВАШ_ТОКЕН') {
+        showMessage("❌ Укажите OAuth-токен в коде сайта", true);
+        return;
     }
+    try {
+        showMessage("Подготовка к сохранению...");
+        // 1. Получаем ссылку для загрузки через свой Worker
+        const proxyBase = PROXY_URL.split('?')[0];
+        const response = await fetch(`${proxyBase}?get_upload_url=1`, {
+            headers: { 'X-Write-Secret': WRITE_SECRET }
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || `HTTP ${response.status}`);
+        }
+        const { href } = await response.json();
+        if (!href) throw new Error("Нет ссылки для загрузки");
+
+        // 2. Создаём Excel-файл...
+        // (остальной код без изменений)
+    }
+}
 
     // Редактирование всех полей
     function showEditAllForm(instrument) {
