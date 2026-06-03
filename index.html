@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Учёт приборов</title>
     <style>
-        /* Стили (можно оставить свои, но для краткости даю базовые) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
@@ -49,10 +48,10 @@
 <script>
     // ========== НАСТРОЙКИ (ЗАМЕНИТЕ НА ВАШИ) ==========
     const PUBLIC_KEY = "ciFZRWIX5aqjNg";                     // Ваш публичный ключ
-    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url="; // Адрес Worker
-    const WRITE_SECRET = "mySecretKey123";                   // Секретный ключ (совпадает с Worker)
-    const OAUTH_TOKEN = "y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1";         // ваш OAuth-токен
-    // ====================================================
+    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url="; // Ваш Worker
+    const WRITE_SECRET = "mySecretKey123";                   // Секретный ключ (должен совпадать с Worker)
+    const OAUTH_TOKEN = "y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1";                    // Ваш OAuth-токен с правами на запись
+    // =================================================
 
     let currentInstruments = [];
 
@@ -169,45 +168,48 @@
         }, 100);
     }
 
-    async function getUploadHref() {
-        const proxyBase = PROXY_URL.split('?')[0];
-        const response = await fetch(`${proxyBase}?get_upload_url=1`, {
-            method: 'GET',
-            headers: { 'X-Write-Secret': WRITE_SECRET }
-        });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || `HTTP ${response.status}`);
-        }
-        const { href } = await response.json();
-        return href;
-    }
-
     async function saveInstrumentsToYandex() {
-    if (!OAUTH_TOKEN || OAUTH_TOKEN === 'y0__ВАШ_ТОКЕН') {
-        showMessage("❌ Укажите OAuth-токен в коде сайта", true);
-        return;
-    }
-    try {
-        showMessage("Подготовка к сохранению...");
-        // 1. Получаем ссылку для загрузки через свой Worker
-        const proxyBase = PROXY_URL.split('?')[0];
-        const response = await fetch(`${proxyBase}?get_upload_url=1`, {
-            headers: { 'X-Write-Secret': WRITE_SECRET }
-        });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || `HTTP ${response.status}`);
+        if (!OAUTH_TOKEN || OAUTH_TOKEN === 'y0__ВАШ_ТОКЕН') {
+            showMessage("❌ Укажите OAuth-токен в коде сайта", true);
+            return;
         }
-        const { href } = await response.json();
-        if (!href) throw new Error("Нет ссылки для загрузки");
+        try {
+            showMessage("Подготовка к сохранению...");
+            const proxyBase = PROXY_URL.split('?')[0];
+            const response = await fetch(`${proxyBase}?get_upload_url=1`, {
+                headers: { 'X-Write-Secret': WRITE_SECRET }
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || `HTTP ${response.status}`);
+            }
+            const { href } = await response.json();
+            if (!href) throw new Error("Нет ссылки для загрузки");
 
-        // 2. Создаём Excel-файл...
-        // (остальной код без изменений)
+            const wsData = currentInstruments.map(inst => [
+                inst.id, inst.name, inst.serial_number, inst.model, inst.type,
+                inst.verification_date, inst.valid_until, inst.document_url,
+                inst.taken_by, inst.taken_where, inst.taken_date
+            ]);
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Приборы");
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+            const putResponse = await fetch(href, {
+                method: 'PUT',
+                body: blob,
+                headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+            });
+            if (!putResponse.ok) throw new Error(`Ошибка загрузки: ${putResponse.status}`);
+            showMessage("✅ Данные сохранены на Яндекс.Диск!");
+        } catch (err) {
+            console.error(err);
+            showMessage("❌ Ошибка сохранения: " + err.message, true);
+        }
     }
-}
 
-    // Редактирование всех полей
     function showEditAllForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
