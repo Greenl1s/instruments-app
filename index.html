@@ -213,12 +213,7 @@
         }
         console.log("PUT успешен, статус:", putResponse.status);
         showMessage("✅ Данные сохранены на Яндекс.Диск!");
-
-        // Принудительно перезагружаем данные с диска, чтобы обновить интерфейс
-        showMessage("Обновляем данные...");
-        currentInstruments = await getTableData();
-        renderApp();
-        showMessage("Данные обновлены!");
+        // НЕ перезагружаем данные с диска, чтобы не терять изменения в памяти
     } catch (err) {
         console.error("Ошибка при сохранении:", err);
         showMessage("❌ Ошибка сохранения: " + err.message, true);
