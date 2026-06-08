@@ -80,41 +80,44 @@
     }
 
     function readExcelFromBlob(blob) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
-                    if (!rows || rows.length < 2) { resolve([]); return; }
-                    const instruments = [];
-                    for (let i = 1; i < rows.length; i++) {
-                        const row = rows[i];
-                        if (!row || row.length === 0) continue;
-                        if (row[0] === undefined || row[0] === "") continue;
-                        instruments.push({
-                            id: String(row[0]),
-                            name: row[1] || '',
-                            serial_number: row[2] || '',
-                            model: row[3] || '',
-                            type: row[4] || '',
-                            verification_date: formatDateFromExcel(row[5]),
-                            valid_until: formatDateFromExcel(row[6]),
-                            document_url: row[7] || '',
-                            taken_by: row[10] || '',
-                            taken_where: row[11] || '',
-                            taken_date: formatDateFromExcel(row[12])
-                        });
-                    }
-                    resolve(instruments);
-                } catch(e) { reject(e); }
-            };
-            reader.onerror = reject;
-            reader.readAsArrayBuffer(blob);
-        });
-    }
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                // Читаем как массив массивов без пропуска строк
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
+                if (!rows || rows.length < 2) { resolve([]); return; }
+                
+                // Первая строка — заголовки, пропускаем её
+                const instruments = [];
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (!row || row.length === 0) continue;
+                    if (row[0] === undefined || row[0] === "") continue;
+                    instruments.push({
+                        id: String(row[0]),
+                        name: row[1] || '',
+                        serial_number: row[2] || '',
+                        model: row[3] || '',
+                        type: row[4] || '',
+                        verification_date: formatDateFromExcel(row[5]),
+                        valid_until: formatDateFromExcel(row[6]),
+                        document_url: row[7] || '',
+                        taken_by: row[8] || '',      // Индексы сдвинулись: теперь столбец I (индекс 8)
+                        taken_where: row[9] || '',   // Столбец J (индекс 9)
+                        taken_date: formatDateFromExcel(row[10]) // Столбец K (индекс 10)
+                    });
+                }
+                resolve(instruments);
+            } catch(e) { reject(e); }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(blob);
+    });
+}
 
     function formatDateFromExcel(dateValue) {
         if (!dateValue) return '';
@@ -168,7 +171,7 @@
         }, 100);
     }
 
-    async function saveInstrumentsToYandex() {
+   async function saveInstrumentsToYandex() {
     if (!OAUTH_TOKEN || OAUTH_TOKEN === 'y0__ВАШ_ТОКЕН') {
         showMessage("❌ Укажите OAuth-токен в коде сайта", true);
         console.error("Токен не задан");
@@ -189,12 +192,21 @@
         if (!href) throw new Error("Нет ссылки для загрузки");
         console.log("Ссылка для загрузки получена:", href);
 
-        // Создание Excel
-        const wsData = currentInstruments.map(inst => [
-            inst.id, inst.name, inst.serial_number, inst.model, inst.type,
-            inst.verification_date, inst.valid_until, inst.document_url,
-            inst.taken_by, inst.taken_where, inst.taken_date
-        ]);
+        // 1. Добавляем строку заголовков
+        const headers = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
+                         "Дата поверки", "Действительно до", "Ссылка на документ",
+                         "Кто взял", "Куда взял", "Дата выдачи"];
+        
+        // 2. Формируем данные: сначала заголовки, затем приборы
+        const wsData = [
+            headers,
+            ...currentInstruments.map(inst => [
+                inst.id, inst.name, inst.serial_number, inst.model, inst.type,
+                inst.verification_date, inst.valid_until, inst.document_url,
+                inst.taken_by, inst.taken_where, inst.taken_date
+            ])
+        ];
+
         const ws = XLSX.utils.aoa_to_sheet(wsData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Приборы");
@@ -213,7 +225,6 @@
         }
         console.log("PUT успешен, статус:", putResponse.status);
         showMessage("✅ Данные сохранены на Яндекс.Диск!");
-        // НЕ перезагружаем данные с диска, чтобы не терять изменения в памяти
     } catch (err) {
         console.error("Ошибка при сохранении:", err);
         showMessage("❌ Ошибка сохранения: " + err.message, true);
