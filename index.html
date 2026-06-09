@@ -11,9 +11,12 @@
         .card { background: white; border-radius: 20px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
         .badge { display: inline-block; padding: 6px 14px; border-radius: 30px; font-size: 14px; font-weight: 600; margin-bottom: 20px; }
-        .good { background: #dcfce7; color: #15803d; }
-        .expired { background: #fee2e2; color: #b91c1c; }
-        .no-date { background: #f1f5f9; color: #475569; }
+        .good { background: #dcfce7; color: #15803d; }      /* поверен */
+        .expired { background: #fed7aa; color: #9a3412; }   /* не поверен – оранжевый */
+        .no-date { background: #f1f5f9; color: #475569; }   /* без поверки – серый */
+        .status-free { background: #dcfce7; color: #15803d; }
+        .status-busy { background: #fef3c7; color: #b45309; }
+        .status-broken { background: #fee2e2; color: #b91c1c; }
         .field { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
         .field-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
         .field-value { font-size: 16px; font-weight: 500; word-break: break-word; }
@@ -25,6 +28,8 @@
         .btn-add { background: #2563eb; }
         .btn-delete { background: #ef4444; }
         .btn-small { padding: 8px 16px; font-size: 13px; }
+        .btn-status { background: #e2e8f0; color: #1e293b; margin-right: 6px; }
+        .btn-status.active { background: #2563eb; color: white; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
         .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
@@ -43,6 +48,7 @@
         .filter-group { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
         .filter-btn { background: #e2e8f0; color: #1e293b; }
         .filter-btn.active { background: #2563eb; color: white; }
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 30px; font-size: 13px; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -72,18 +78,29 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    // Новые функции статуса
-    function getStatusText(validUntil) {
+    // Статус поверки
+    function getVerificationText(validUntil) {
         if (!validUntil || validUntil === '-' || validUntil === '') return 'без поверки';
         const today = new Date().toISOString().slice(0,10);
         return validUntil < today ? 'не поверен' : 'поверен';
     }
-
-    function getStatusClass(validUntil) {
-        const status = getStatusText(validUntil);
-        if (status === 'поверен') return 'good';
-        if (status === 'не поверен') return 'expired';
+    function getVerificationClass(validUntil) {
+        const text = getVerificationText(validUntil);
+        if (text === 'поверен') return 'good';
+        if (text === 'не поверен') return 'expired';
         return 'no-date';
+    }
+
+    // Статус состояния прибора (свободен/занят/не исправен)
+    function getConditionText(condition) {
+        if (condition === 'busy') return 'занят';
+        if (condition === 'broken') return 'не исправен';
+        return 'свободен';
+    }
+    function getConditionClass(condition) {
+        if (condition === 'busy') return 'status-busy';
+        if (condition === 'broken') return 'status-broken';
+        return 'status-free';
     }
 
     async function saveToYandex() {
@@ -101,13 +118,14 @@
 
             const headersRow = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
                                 "Дата поверки", "Действительно до", "Ссылка на документ",
-                                "Кто взял", "Куда взял", "Дата выдачи"];
+                                "Кто взял", "Куда взял", "Дата выдачи", "Состояние"];
             const wsData = [
                 headersRow,
                 ...currentInstruments.map(inst => [
                     inst.id, inst.name, inst.serial_number, inst.model, inst.type,
                     inst.verification_date, inst.valid_until, inst.document_url,
-                    inst.taken_by, inst.taken_where, inst.taken_date
+                    inst.taken_by, inst.taken_where, inst.taken_date,
+                    inst.condition || 'free'
                 ])
             ];
             const wsInstruments = XLSX.utils.aoa_to_sheet(wsData);
@@ -211,7 +229,8 @@
                                     document_url: row[7] || '',
                                     taken_by: row[8] || '',
                                     taken_where: row[9] || '',
-                                    taken_date: formatDateFromExcel(row[10])
+                                    taken_date: formatDateFromExcel(row[10]),
+                                    condition: row[11] || 'free'   // новый столбец
                                 });
                             }
                         }
@@ -345,7 +364,8 @@
                 document_url: document.getElementById('new_doc').value || "",
                 taken_by: "",
                 taken_where: "",
-                taken_date: ""
+                taken_date: "",
+                condition: "free"
             };
             currentInstruments.push(newInstrument);
             document.getElementById('customModal').style.display = 'none';
@@ -443,6 +463,8 @@
             instrument.taken_by = newTakenBy;
             instrument.taken_where = newTakenWhere;
             instrument.taken_date = newTakenDate;
+            // Автоматически меняем состояние на "занят" при выдаче
+            if (newTakenBy) instrument.condition = 'busy';
             document.getElementById('customModal').style.display = 'none';
             renderApp();
             await saveToYandex();
@@ -454,11 +476,34 @@
             instrument.taken_by = '';
             instrument.taken_where = '';
             instrument.taken_date = '';
+            // Автоматически меняем состояние на "свободен" при возврате (если не был сломан)
+            if (instrument.condition !== 'broken') instrument.condition = 'free';
             document.getElementById('customModal').style.display = 'none';
             renderApp();
             await saveToYandex();
             showMessage("✅ Данные о выдаче очищены!");
         };
+    }
+
+    function setCondition(instrument, condition) {
+        if (instrument.condition === condition) return;
+        instrument.condition = condition;
+        // Если прибор становится неисправным, очищаем выдачу
+        if (condition === 'broken') {
+            instrument.taken_by = '';
+            instrument.taken_where = '';
+            instrument.taken_date = '';
+            // Можно добавить запись в историю о поломке, но для простоты пока нет
+        } else if (condition === 'free') {
+            // Если делаем свободным, но есть данные выдачи – очищаем
+            if (instrument.taken_by) {
+                instrument.taken_by = '';
+                instrument.taken_where = '';
+                instrument.taken_date = '';
+            }
+        }
+        renderApp();
+        saveToYandex().then(() => showMessage(`Статус изменён на "${getConditionText(condition)}"`));
     }
 
     function escapeHtml(str) {
@@ -472,8 +517,10 @@
     }
 
     function renderCard(inst) {
-        const statusText = getStatusText(inst.valid_until);
-        const statusClass = getStatusClass(inst.valid_until);
+        const verifText = getVerificationText(inst.valid_until);
+        const verifClass = getVerificationClass(inst.valid_until);
+        const conditionText = getConditionText(inst.condition);
+        const conditionClass = getConditionClass(inst.condition);
         const hasTaken = inst.taken_by && inst.taken_by.trim() !== '';
         const takenHtml = hasTaken ? `
             <div class="issued-info">
@@ -487,7 +534,10 @@
         return `
         <div class="card">
             <div class="title">${escapeHtml(inst.name)}</div>
-            <div class="badge ${statusClass}">${escapeHtml(statusText)}</div>
+            <div class="badge ${verifClass}">${escapeHtml(verifText)}</div>
+            <div class="field"><div class="field-label">Состояние</div>
+                <div><span class="status-badge ${conditionClass}">${conditionText}</span></div>
+            </div>
             <div class="field"><div class="field-label">Серийный номер</div><div class="field-value">${escapeHtml(inst.serial_number) || '—'}</div></div>
             <div class="field"><div class="field-label">Модель</div><div class="field-value">${escapeHtml(inst.model) || '—'}</div></div>
             <div class="field"><div class="field-label">Тип</div><div class="field-value">${escapeHtml(inst.type) || '—'}</div></div>
@@ -501,9 +551,15 @@
                     const returnDate = new Date().toISOString().slice(0,10);
                     closeHistoryEntry(currentInstrument, returnDate);
                     currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
+                    if (currentInstrument.condition !== 'broken') currentInstrument.condition = 'free';
                     renderApp(); 
                     saveToYandex().then(() => showMessage('Выдача очищена!'));
                 })()">📦 Положить прибор</button>
+                <div class="button-group" style="margin-top:0;">
+                    <button class="btn btn-status ${inst.condition === 'free' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'free')">Свободен</button>
+                    <button class="btn btn-status ${inst.condition === 'busy' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'busy')">Занят</button>
+                    <button class="btn btn-status ${inst.condition === 'broken' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'broken')">Не исправен</button>
+                </div>
                 <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
                 <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">🗑️ Удалить прибор</button>
@@ -521,17 +577,20 @@
             filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
         }
         if (statusFilter !== "all") {
-            filtered = filtered.filter(inst => getStatusText(inst.valid_until) === statusFilter);
+            filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === statusFilter);
         }
         
         let html = '<div class="card"><h1>Оборудование</h1>';
         for (const inst of filtered) {
-            const statusText = getStatusText(inst.valid_until);
-            const statusClass = getStatusClass(inst.valid_until);
-            const takenIcon = inst.taken_by ? '📤' : '✅';
+            const verifText = getVerificationText(inst.valid_until);
+            const verifClass = getVerificationClass(inst.valid_until);
+            const condText = getConditionText(inst.condition);
+            const condClass = getConditionClass(inst.condition);
             html += `<a href="?id=${encodeURIComponent(inst.id)}" class="list-item">
                 <span>#${escapeHtml(inst.id)} ${escapeHtml(inst.name)}</span>
-                <span><span class="badge ${statusClass}" style="margin:0;padding:4px 10px;">${escapeHtml(statusText)}</span> ${takenIcon}</span>
+                <span><span class="badge ${verifClass}" style="margin:0;padding:4px 10px;">${escapeHtml(verifText)}</span>
+                      <span class="status-badge ${condClass}" style="margin-left:8px;">${escapeHtml(condText)}</span>
+                </span>
             </a>`;
         }
         html += '</div>';
