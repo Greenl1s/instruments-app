@@ -56,6 +56,7 @@
     // ================================
 
     let currentInstruments = [];
+    let currentHistory = [];   // история выдач
     let searchQuery = "";
 
     function showMessage(msg, isError = false) {
@@ -67,6 +68,7 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
+    // Сохранение двух листов на Яндекс.Диск
     async function saveToYandex() {
         try {
             const proxyBase = PROXY_URL.split('?')[0];
@@ -80,6 +82,7 @@
             const { href } = await response.json();
             if (!href) throw new Error("Нет ссылки для загрузки");
 
+            // Лист "Приборы"
             const headersRow = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
                                 "Дата поверки", "Действительно до", "Ссылка на документ",
                                 "Кто взял", "Куда взял", "Дата выдачи"];
@@ -91,9 +94,21 @@
                     inst.taken_by, inst.taken_where, inst.taken_date
                 ])
             ];
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wsInstruments = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Лист "История"
+            const historyHeaders = ["ID прибора", "Название", "Кто взял", "Куда взял", "Дата выдачи", "Дата возврата"];
+            const historyData = [
+                historyHeaders,
+                ...currentHistory.map(rec => [
+                    rec.id, rec.name, rec.takenBy, rec.takenWhere, rec.issuedDate, rec.returnDate || ""
+                ])
+            ];
+            const wsHistory = XLSX.utils.aoa_to_sheet(historyData);
+
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Приборы");
+            XLSX.utils.book_append_sheet(wb, wsInstruments, "Приборы");
+            XLSX.utils.book_append_sheet(wb, wsHistory, "История");
             const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
             const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
@@ -110,6 +125,39 @@
         }
     }
 
+    // Добавление записи в историю при выдаче
+    function addHistoryEntry(instrument, takenBy, takenWhere, issuedDate) {
+        currentHistory.push({
+            id: instrument.id,
+            name: instrument.name,
+            takenBy: takenBy,
+            takenWhere: takenWhere,
+            issuedDate: issuedDate,
+            returnDate: null
+        });
+    }
+
+    // Обновление истории при возврате (ищем последнюю незакрытую запись)
+    function closeHistoryEntry(instrument, returnDate) {
+        for (let i = currentHistory.length - 1; i >= 0; i--) {
+            if (currentHistory[i].id === instrument.id && !currentHistory[i].returnDate) {
+                currentHistory[i].returnDate = returnDate;
+                return true;
+            }
+        }
+        // Если не нашли – создаём запись-возврат без выдачи (на всякий случай)
+        currentHistory.push({
+            id: instrument.id,
+            name: instrument.name,
+            takenBy: "?",
+            takenWhere: "?",
+            issuedDate: "?",
+            returnDate: returnDate
+        });
+        return false;
+    }
+
+    // Загрузка данных (читаем оба листа)
     async function getTableData() {
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
@@ -132,29 +180,55 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
-                    if (!rows || rows.length < 2) { resolve([]); return; }
-                    const instruments = [];
-                    for (let i = 1; i < rows.length; i++) {
-                        const row = rows[i];
-                        if (!row || row.length === 0) continue;
-                        if (row[0] === undefined || row[0] === "") continue;
-                        instruments.push({
-                            id: String(row[0]),
-                            name: row[1] || '',
-                            serial_number: row[2] || '',
-                            model: row[3] || '',
-                            type: row[4] || '',
-                            verification_date: formatDateFromExcel(row[5]),
-                            valid_until: formatDateFromExcel(row[6]),
-                            document_url: row[7] || '',
-                            taken_by: row[8] || '',
-                            taken_where: row[9] || '',
-                            taken_date: formatDateFromExcel(row[10])
-                        });
+                    
+                    // Читаем лист "Приборы"
+                    let instruments = [];
+                    const sheetInstr = workbook.Sheets["Приборы"];
+                    if (sheetInstr) {
+                        const rows = XLSX.utils.sheet_to_json(sheetInstr, { header: 1, defval: "" });
+                        if (rows && rows.length > 1) {
+                            for (let i = 1; i < rows.length; i++) {
+                                const row = rows[i];
+                                if (!row || row.length === 0) continue;
+                                if (row[0] === undefined || row[0] === "") continue;
+                                instruments.push({
+                                    id: String(row[0]),
+                                    name: row[1] || '',
+                                    serial_number: row[2] || '',
+                                    model: row[3] || '',
+                                    type: row[4] || '',
+                                    verification_date: formatDateFromExcel(row[5]),
+                                    valid_until: formatDateFromExcel(row[6]),
+                                    document_url: row[7] || '',
+                                    taken_by: row[8] || '',
+                                    taken_where: row[9] || '',
+                                    taken_date: formatDateFromExcel(row[10])
+                                });
+                            }
+                        }
                     }
-                    resolve(instruments);
+                    
+                    // Читаем лист "История"
+                    let history = [];
+                    const sheetHist = workbook.Sheets["История"];
+                    if (sheetHist) {
+                        const rows = XLSX.utils.sheet_to_json(sheetHist, { header: 1, defval: "" });
+                        if (rows && rows.length > 1) {
+                            for (let i = 1; i < rows.length; i++) {
+                                const row = rows[i];
+                                if (!row || row.length < 6) continue;
+                                history.push({
+                                    id: String(row[0] || ''),
+                                    name: row[1] || '',
+                                    takenBy: row[2] || '',
+                                    takenWhere: row[3] || '',
+                                    issuedDate: row[4] || '',
+                                    returnDate: row[5] || null
+                                });
+                            }
+                        }
+                    }
+                    resolve({ instruments, history });
                 } catch(e) { reject(e); }
             };
             reader.onerror = reject;
@@ -220,6 +294,7 @@
             const index = currentInstruments.findIndex(i => i.id === instrument.id);
             if (index !== -1) {
                 currentInstruments.splice(index, 1);
+                // Также можно удалить связанную историю, но оставим для истории
                 await saveToYandex();
                 renderApp();
                 showMessage(`✅ Прибор "${instrument.name}" удалён!`);
@@ -327,15 +402,25 @@
         `;
         showModal(`Взять прибор: ${escapeHtml(instrument.name)}`, formHtml);
         document.getElementById('saveBtn').onclick = async () => {
-            instrument.taken_by = document.getElementById('takenBy').value;
-            instrument.taken_where = document.getElementById('takenWhere').value;
-            instrument.taken_date = document.getElementById('takenDate').value;
+            const newTakenBy = document.getElementById('takenBy').value;
+            const newTakenWhere = document.getElementById('takenWhere').value;
+            const newTakenDate = document.getElementById('takenDate').value;
+            // Добавляем запись в историю
+            if (newTakenBy && newTakenWhere && newTakenDate) {
+                addHistoryEntry(instrument, newTakenBy, newTakenWhere, newTakenDate);
+            }
+            instrument.taken_by = newTakenBy;
+            instrument.taken_where = newTakenWhere;
+            instrument.taken_date = newTakenDate;
             document.getElementById('customModal').style.display = 'none';
             renderApp();
             await saveToYandex();
             showMessage("✅ Выдача сохранена!");
         };
         document.getElementById('clearBtn').onclick = async () => {
+            // При возврате закрываем последнюю запись в истории
+            const returnDate = new Date().toISOString().slice(0,10);
+            closeHistoryEntry(instrument, returnDate);
             instrument.taken_by = '';
             instrument.taken_where = '';
             instrument.taken_date = '';
@@ -381,7 +466,13 @@
             ${takenHtml}
             <div class="button-group">
                 <button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>
-                <button class="btn btn-clear" onclick="(() => { currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; renderApp(); saveToYandex().then(() => showMessage('Выдача очищена!')); })()">📦 Положить прибор</button>
+                <button class="btn btn-clear" onclick="(() => { 
+                    const returnDate = new Date().toISOString().slice(0,10);
+                    closeHistoryEntry(currentInstrument, returnDate);
+                    currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
+                    renderApp(); 
+                    saveToYandex().then(() => showMessage('Выдача очищена!'));
+                })()">📦 Положить прибор</button>
                 <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
                 <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">🗑️ Удалить прибор</button>
@@ -428,7 +519,6 @@
                 appDiv.innerHTML = `<div class="error">Прибор не найден<br><a href="?" style="color:#2563eb;">← Назад</a></div>`;
             }
         } else {
-            // На главной странице статическое поле поиска и список
             const headerHtml = `
                 <div class="card" id="searchCard">
                     <div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>
@@ -457,7 +547,9 @@
 
     (async () => {
         try {
-            currentInstruments = await getTableData();
+            const { instruments, history } = await getTableData();
+            currentInstruments = instruments;
+            currentHistory = history;
             renderApp();
         } catch(e) {
             document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте прокси и публичный ключ.</div>`;
