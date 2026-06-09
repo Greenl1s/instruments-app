@@ -30,6 +30,7 @@
         .btn-small { padding: 8px 16px; font-size: 13px; }
         .btn-status { background: #e2e8f0; color: #1e293b; margin-right: 6px; }
         .btn-status.active { background: #2563eb; color: white; }
+        .btn-copy { background: #10b981; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
         .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
@@ -48,7 +49,7 @@
         .qr-container canvas { margin: 10px auto; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px; background: white; }
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1100; }
         .search-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; margin-bottom: 16px; }
-        .filter-group { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+        .filter-group { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
         .filter-select { padding: 8px 12px; border-radius: 12px; border: 1px solid #cbd5e1; background: white; font-size: 14px; }
     </style>
 </head>
@@ -68,8 +69,8 @@
     let currentInstruments = [];
     let currentHistory = [];
     let searchQuery = "";
-    let statusFilter = "all";          // фильтр по поверке (all, поверен, не поверен, без поверки)
-    let conditionFilter = "all";       // фильтр по состоянию (all, free, busy, broken)
+    let verificationFilter = "all";   // all, поверен, не поверен, без поверки
+    let conditionFilter = "all";      // all, free, busy, broken
 
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
@@ -501,6 +502,22 @@
         saveToYandex().then(() => showMessage(`Статус изменён на "${getConditionText(condition)}"`));
     }
 
+    function copyInstrumentInfo(inst) {
+        const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
+        const text = `Название: ${inst.name}
+Серийный номер: ${inst.serial_number || '—'}
+Модель: ${inst.model || '—'}
+Тип: ${inst.type || '—'}
+${dateLabel}: ${inst.verification_date || '—'}
+Действительно до: ${inst.valid_until || '—'}
+Ссылка на документ: ${inst.document_url || '—'}`;
+        navigator.clipboard.writeText(text).then(() => {
+            showMessage("✅ Информация скопирована в буфер обмена!");
+        }).catch(() => {
+            showMessage("❌ Не удалось скопировать текст", true);
+        });
+    }
+
     function escapeHtml(str) {
         if (!str) return '';
         return String(str).replace(/[&<>]/g, function(m) {
@@ -557,6 +574,7 @@
                 </div>
                 <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
+                <button class="btn btn-copy" onclick="copyInstrumentInfo(currentInstrument)">📋 Копировать информацию</button>
                 <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">🗑️ Удалить прибор</button>
                 <a href="?" class="btn btn-clear">← К списку</a>
             </div>
@@ -567,18 +585,18 @@
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
         let filtered = currentInstruments;
-        // Фильтр по поверке
-        if (statusFilter !== "all") {
-            filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === statusFilter);
-        }
-        // Фильтр по состоянию
-        if (conditionFilter !== "all") {
-            filtered = filtered.filter(inst => inst.condition === conditionFilter);
-        }
         // Поиск по названию
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
+        }
+        // Фильтр по статусу поверки
+        if (verificationFilter !== "all") {
+            filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === verificationFilter);
+        }
+        // Фильтр по состоянию (свободен/занят/не исправен)
+        if (conditionFilter !== "all") {
+            filtered = filtered.filter(inst => inst.condition === conditionFilter);
         }
         
         let html = '<div class="card"><h1>Оборудование</h1>';
@@ -618,14 +636,14 @@
                     <div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>
                     <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
                     <div class="filter-group">
-                        <select id="verificationFilter" class="filter-select">
-                            <option value="all" ${statusFilter === 'all' ? 'selected' : ''}>Все по поверке</option>
-                            <option value="поверен" ${statusFilter === 'поверен' ? 'selected' : ''}>Поверен</option>
-                            <option value="не поверен" ${statusFilter === 'не поверен' ? 'selected' : ''}>Не поверен</option>
-                            <option value="без поверки" ${statusFilter === 'без поверки' ? 'selected' : ''}>Без поверки</option>
+                        <select id="verificationSelect" class="filter-select">
+                            <option value="all" ${verificationFilter === 'all' ? 'selected' : ''}>Все (поверка)</option>
+                            <option value="поверен" ${verificationFilter === 'поверен' ? 'selected' : ''}>Поверен</option>
+                            <option value="не поверен" ${verificationFilter === 'не поверен' ? 'selected' : ''}>Не поверен</option>
+                            <option value="без поверки" ${verificationFilter === 'без поверки' ? 'selected' : ''}>Без поверки</option>
                         </select>
-                        <select id="conditionFilter" class="filter-select">
-                            <option value="all" ${conditionFilter === 'all' ? 'selected' : ''}>Все по состоянию</option>
+                        <select id="conditionSelect" class="filter-select">
+                            <option value="all" ${conditionFilter === 'all' ? 'selected' : ''}>Все (состояние)</option>
                             <option value="free" ${conditionFilter === 'free' ? 'selected' : ''}>Свободен</option>
                             <option value="busy" ${conditionFilter === 'busy' ? 'selected' : ''}>Занят</option>
                             <option value="broken" ${conditionFilter === 'broken' ? 'selected' : ''}>Не исправен</option>
@@ -648,17 +666,17 @@
                     if (container) container.innerHTML = renderList();
                 };
             }
-            const verifSelect = document.getElementById('verificationFilter');
-            const condSelect = document.getElementById('conditionFilter');
-            if (verifSelect) {
-                verifSelect.addEventListener('change', (e) => {
-                    statusFilter = e.target.value;
+            const verificationSelect = document.getElementById('verificationSelect');
+            if (verificationSelect) {
+                verificationSelect.addEventListener('change', (e) => {
+                    verificationFilter = e.target.value;
                     const container = document.getElementById('listContainer');
                     if (container) container.innerHTML = renderList();
                 });
             }
-            if (condSelect) {
-                condSelect.addEventListener('change', (e) => {
+            const conditionSelect = document.getElementById('conditionSelect');
+            if (conditionSelect) {
+                conditionSelect.addEventListener('change', (e) => {
                     conditionFilter = e.target.value;
                     const container = document.getElementById('listContainer');
                     if (container) container.innerHTML = renderList();
