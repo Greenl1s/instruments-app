@@ -224,7 +224,6 @@
                 await saveToYandex();
                 renderApp();
                 showMessage(`✅ Прибор "${instrument.name}" удалён!`);
-                // Если мы находились на карточке удалённого прибора – возвращаемся на главную
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('id') === instrument.id) {
                     window.location.href = window.location.href.split('?')[0];
@@ -403,7 +402,7 @@
         
         let html = '<div class="card"><h1>Оборудование</h1>';
         html += `<div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>`;
-        html += `<input type="text" class="search-box" id="searchInput" placeholder="🔍 Поиск по названию..." oninput="searchQuery = this.value; renderApp();">`;
+        html += `<input type="text" class="search-box" id="searchInput" placeholder="🔍 Поиск по названию...">`;
         for (const inst of filtered) {
             const status = getStatus(inst.valid_until);
             const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
@@ -415,6 +414,24 @@
         }
         html += '</div>';
         return html;
+    }
+
+    function bindSearchEvents() {
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            const newSearch = searchInput.cloneNode(true);
+            searchInput.parentNode.replaceChild(newSearch, searchInput);
+            newSearch.addEventListener('input', function(e) {
+                searchQuery = e.target.value;
+                if (!window.location.search.includes('id=')) {
+                    const appDiv = document.getElementById('app');
+                    if (appDiv) {
+                        appDiv.innerHTML = renderList();
+                        bindSearchEvents();
+                    }
+                }
+            });
+        }
     }
 
     function renderApp() {
@@ -432,8 +449,7 @@
             }
         } else {
             appDiv.innerHTML = renderList();
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) searchInput.value = searchQuery;
+            bindSearchEvents();
         }
     }
 
