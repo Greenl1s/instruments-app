@@ -23,6 +23,8 @@
         .btn-clear { background: #64748b; }
         .btn-qr { background: #8b5cf6; }
         .btn-save { background: #10b981; }
+        .btn-add { background: #2563eb; }
+        .btn-delete { background: #ef4444; }
         .btn-small { padding: 8px 16px; font-size: 13px; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
@@ -38,6 +40,7 @@
         .issued-info { background: #fef3c7; padding: 12px; border-radius: 12px; margin-top: 10px; }
         .qr-container canvas { margin: 10px auto; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px; background: white; }
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1100; }
+        .search-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; margin-bottom: 16px; }
     </style>
 </head>
 <body>
@@ -46,22 +49,66 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
-    // ========== НАСТРОЙКИ (ЗАМЕНИТЕ НА ВАШИ) ==========
-    const PUBLIC_KEY = "ylbohEzYeSxgJw";                     // Ваш публичный ключ
-    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url="; // Ваш Worker
-    const WRITE_SECRET = "mySecretKey123";                   // Секретный ключ (должен совпадать с Worker)
-    const OAUTH_TOKEN = "y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1";                    // Ваш OAuth-токен с правами на запись
-    // =================================================
+    // ========== НАСТРОЙКИ ==========
+    const PUBLIC_KEY = "ylbohEzYeSxgJw";
+    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";
+    const WRITE_SECRET = "mySecretKey123";
+    const OAUTH_TOKEN = "y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1";
+    // ================================
 
     let currentInstruments = [];
+    let searchQuery = "";
 
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
         toast.className = 'toast';
         toast.textContent = msg;
-        toast.style.background = isError ? '#e74c3c' : '#2ecc71';
+        toast.style.background = isError ? '#ef4444' : '#10b981';
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
+    }
+
+    async function saveToYandex() {
+        try {
+            const proxyBase = PROXY_URL.split('?')[0];
+            const response = await fetch(`${proxyBase}?get_upload_url=1`, {
+                headers: { 'X-Write-Secret': WRITE_SECRET }
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || `HTTP ${response.status}`);
+            }
+            const { href } = await response.json();
+            if (!href) throw new Error("Нет ссылки для загрузки");
+
+            const headersRow = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
+                                "Дата поверки", "Действительно до", "Ссылка на документ",
+                                "Кто взял", "Куда взял", "Дата выдачи"];
+            const wsData = [
+                headersRow,
+                ...currentInstruments.map(inst => [
+                    inst.id, inst.name, inst.serial_number, inst.model, inst.type,
+                    inst.verification_date, inst.valid_until, inst.document_url,
+                    inst.taken_by, inst.taken_where, inst.taken_date
+                ])
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Приборы");
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+            const putResponse = await fetch(href, {
+                method: 'PUT',
+                body: blob,
+                headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+            });
+            if (!putResponse.ok) throw new Error(`Ошибка загрузки: ${putResponse.status}`);
+            console.log("Данные сохранены на Диск");
+        } catch (err) {
+            console.error("Ошибка сохранения:", err);
+            showMessage("Ошибка сохранения на Диск", true);
+        }
     }
 
     async function getTableData() {
@@ -80,44 +127,41 @@
     }
 
     function readExcelFromBlob(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                // Читаем как массив массивов без пропуска строк
-                const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
-                if (!rows || rows.length < 2) { resolve([]); return; }
-                
-                // Первая строка — заголовки, пропускаем её
-                const instruments = [];
-                for (let i = 1; i < rows.length; i++) {
-                    const row = rows[i];
-                    if (!row || row.length === 0) continue;
-                    if (row[0] === undefined || row[0] === "") continue;
-                    instruments.push({
-                        id: String(row[0]),
-                        name: row[1] || '',
-                        serial_number: row[2] || '',
-                        model: row[3] || '',
-                        type: row[4] || '',
-                        verification_date: formatDateFromExcel(row[5]),
-                        valid_until: formatDateFromExcel(row[6]),
-                        document_url: row[7] || '',
-                        taken_by: row[8] || '',      // Индексы сдвинулись: теперь столбец I (индекс 8)
-                        taken_where: row[9] || '',   // Столбец J (индекс 9)
-                        taken_date: formatDateFromExcel(row[10]) // Столбец K (индекс 10)
-                    });
-                }
-                resolve(instruments);
-            } catch(e) { reject(e); }
-        };
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(blob);
-    });
-}
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
+                    if (!rows || rows.length < 2) { resolve([]); return; }
+                    const instruments = [];
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        if (!row || row.length === 0) continue;
+                        if (row[0] === undefined || row[0] === "") continue;
+                        instruments.push({
+                            id: String(row[0]),
+                            name: row[1] || '',
+                            serial_number: row[2] || '',
+                            model: row[3] || '',
+                            type: row[4] || '',
+                            verification_date: formatDateFromExcel(row[5]),
+                            valid_until: formatDateFromExcel(row[6]),
+                            document_url: row[7] || '',
+                            taken_by: row[8] || '',
+                            taken_where: row[9] || '',
+                            taken_date: formatDateFromExcel(row[10])
+                        });
+                    }
+                    resolve(instruments);
+                } catch(e) { reject(e); }
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(blob);
+        });
+    }
 
     function formatDateFromExcel(dateValue) {
         if (!dateValue) return '';
@@ -171,65 +215,70 @@
         }, 100);
     }
 
-   async function saveInstrumentsToYandex() {
-    if (!OAUTH_TOKEN || OAUTH_TOKEN === 'y0__ВАШ_ТОКЕН') {
-        showMessage("❌ Укажите OAuth-токен в коде сайта", true);
-        console.error("Токен не задан");
-        return;
-    }
-    try {
-        showMessage("Подготовка к сохранению...");
-        const proxyBase = PROXY_URL.split('?')[0];
-        console.log("Запрашиваем ссылку для загрузки у Worker...");
-        const response = await fetch(`${proxyBase}?get_upload_url=1`, {
-            headers: { 'X-Write-Secret': WRITE_SECRET }
-        });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || `HTTP ${response.status}`);
+    async function confirmDelete(instrument) {
+        const confirmed = confirm(`Удалить прибор "${instrument.name}" (ID ${instrument.id})? Это действие нельзя отменить.`);
+        if (confirmed) {
+            const index = currentInstruments.findIndex(i => i.id === instrument.id);
+            if (index !== -1) {
+                currentInstruments.splice(index, 1);
+                await saveToYandex();
+                renderApp();
+                showMessage(`✅ Прибор "${instrument.name}" удалён!`);
+                // Если мы находились на карточке удалённого прибора – возвращаемся на главную
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('id') === instrument.id) {
+                    window.location.href = window.location.href.split('?')[0];
+                }
+            }
         }
-        const { href } = await response.json();
-        if (!href) throw new Error("Нет ссылки для загрузки");
-        console.log("Ссылка для загрузки получена:", href);
-
-        // 1. Добавляем строку заголовков
-        const headers = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
-                         "Дата поверки", "Действительно до", "Ссылка на документ",
-                         "Кто взял", "Куда взял", "Дата выдачи"];
-        
-        // 2. Формируем данные: сначала заголовки, затем приборы
-        const wsData = [
-            headers,
-            ...currentInstruments.map(inst => [
-                inst.id, inst.name, inst.serial_number, inst.model, inst.type,
-                inst.verification_date, inst.valid_until, inst.document_url,
-                inst.taken_by, inst.taken_where, inst.taken_date
-            ])
-        ];
-
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Приборы");
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-        console.log("Отправляем PUT-запрос на Диск...");
-        const putResponse = await fetch(href, {
-            method: 'PUT',
-            body: blob,
-            headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
-        });
-        if (!putResponse.ok) {
-            const errorText = await putResponse.text();
-            throw new Error(`Ошибка загрузки: ${putResponse.status} ${errorText}`);
-        }
-        console.log("PUT успешен, статус:", putResponse.status);
-        showMessage("✅ Данные сохранены на Яндекс.Диск!");
-    } catch (err) {
-        console.error("Ошибка при сохранении:", err);
-        showMessage("❌ Ошибка сохранения: " + err.message, true);
     }
-}
+
+    function showAddForm() {
+        let maxId = 0;
+        for (const inst of currentInstruments) {
+            const num = parseInt(inst.id, 10);
+            if (!isNaN(num) && num > maxId) maxId = num;
+        }
+        const nextId = maxId + 1;
+        const today = new Date().toISOString().slice(0,10);
+        const formHtml = `
+            <div class="form-group"><label>Название прибора</label><input type="text" id="new_name" placeholder="Например: Мультиметр"></div>
+            <div class="form-group"><label>Серийный номер</label><input type="text" id="new_serial" placeholder="Введите серийный номер"></div>
+            <div class="form-group"><label>Модель</label><input type="text" id="new_model" placeholder="Модель"></div>
+            <div class="form-group"><label>Тип документа</label><input type="text" id="new_type" placeholder="Поверка/Калибровка"></div>
+            <div class="form-group"><label>Дата поверки</label><input type="date" id="new_verif" value="${today}"></div>
+            <div class="form-group"><label>Действительно до</label><input type="date" id="new_valid" value="${today}"></div>
+            <div class="form-group"><label>Ссылка на документ</label><input type="text" id="new_doc" placeholder="https://..."></div>
+            <div class="button-group">
+                <button class="btn btn-add" id="confirmAddBtn">➕ Добавить прибор</button>
+                <button class="btn btn-clear" id="cancelAddBtn">Отмена</button>
+            </div>
+        `;
+        showModal(`Добавление нового прибора (ID будет ${nextId})`, formHtml);
+        document.getElementById('confirmAddBtn').onclick = async () => {
+            const newInstrument = {
+                id: String(nextId),
+                name: document.getElementById('new_name').value || "Новый прибор",
+                serial_number: document.getElementById('new_serial').value || "",
+                model: document.getElementById('new_model').value || "",
+                type: document.getElementById('new_type').value || "",
+                verification_date: document.getElementById('new_verif').value || "",
+                valid_until: document.getElementById('new_valid').value || "",
+                document_url: document.getElementById('new_doc').value || "",
+                taken_by: "",
+                taken_where: "",
+                taken_date: ""
+            };
+            currentInstruments.push(newInstrument);
+            document.getElementById('customModal').style.display = 'none';
+            renderApp();
+            await saveToYandex();
+            showMessage(`✅ Прибор "${newInstrument.name}" добавлен и сохранён!`);
+        };
+        document.getElementById('cancelAddBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+    }
 
     function showEditAllForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
@@ -248,7 +297,7 @@
             <button class="btn btn-clear" id="cancelAllBtn">Отмена</button>
         `;
         showModal(`Редактирование #${instrument.id}`, formHtml);
-        document.getElementById('saveAllBtn').onclick = () => {
+        document.getElementById('saveAllBtn').onclick = async () => {
             instrument.name = document.getElementById('edit_name').value;
             instrument.serial_number = document.getElementById('edit_serial').value;
             instrument.model = document.getElementById('edit_model').value;
@@ -261,7 +310,8 @@
             instrument.taken_date = document.getElementById('edit_taken_date').value;
             document.getElementById('customModal').style.display = 'none';
             renderApp();
-            saveInstrumentsToYandex();
+            await saveToYandex();
+            showMessage("✅ Изменения сохранены!");
         };
         document.getElementById('cancelAllBtn').onclick = () => {
             document.getElementById('customModal').style.display = 'none';
@@ -278,21 +328,23 @@
             <button class="btn btn-clear" id="clearBtn">Очистить</button>
         `;
         showModal(`Взять прибор: ${escapeHtml(instrument.name)}`, formHtml);
-        document.getElementById('saveBtn').onclick = () => {
+        document.getElementById('saveBtn').onclick = async () => {
             instrument.taken_by = document.getElementById('takenBy').value;
             instrument.taken_where = document.getElementById('takenWhere').value;
             instrument.taken_date = document.getElementById('takenDate').value;
             document.getElementById('customModal').style.display = 'none';
             renderApp();
-            saveInstrumentsToYandex();
+            await saveToYandex();
+            showMessage("✅ Выдача сохранена!");
         };
-        document.getElementById('clearBtn').onclick = () => {
+        document.getElementById('clearBtn').onclick = async () => {
             instrument.taken_by = '';
             instrument.taken_where = '';
             instrument.taken_date = '';
             document.getElementById('customModal').style.display = 'none';
             renderApp();
-            saveInstrumentsToYandex();
+            await saveToYandex();
+            showMessage("✅ Данные о выдаче очищены!");
         };
     }
 
@@ -331,10 +383,10 @@
             ${takenHtml}
             <div class="button-group">
                 <button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>
-                <button class="btn btn-clear" onclick="(() => { currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; renderApp(); saveInstrumentsToYandex(); })()">📦 Положить прибор</button>
+                <button class="btn btn-clear" onclick="(() => { currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; renderApp(); saveToYandex().then(() => showMessage('Выдача очищена!')); })()">📦 Положить прибор</button>
                 <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
-                <button class="btn btn-save" onclick="saveInstrumentsToYandex()">💾 Сохранить на Диск</button>
+                <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">🗑️ Удалить прибор</button>
                 <a href="?" class="btn btn-clear">← К списку</a>
             </div>
         </div>`;
@@ -342,9 +394,17 @@
 
     function renderList() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
+        
+        let filtered = currentInstruments;
+        if (searchQuery.trim() !== "") {
+            const query = searchQuery.trim().toLowerCase();
+            filtered = currentInstruments.filter(inst => inst.name.toLowerCase().includes(query));
+        }
+        
         let html = '<div class="card"><h1>Оборудование</h1>';
-        html += `<div class="button-group"><button class="btn btn-save" onclick="saveInstrumentsToYandex()">💾 Сохранить все изменения на Диск</button></div>`;
-        for (const inst of currentInstruments) {
+        html += `<div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>`;
+        html += `<input type="text" class="search-box" id="searchInput" placeholder="🔍 Поиск по названию..." oninput="searchQuery = this.value; renderApp();">`;
+        for (const inst of filtered) {
             const status = getStatus(inst.valid_until);
             const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
             const takenIcon = inst.taken_by ? '📤' : '✅';
@@ -372,6 +432,8 @@
             }
         } else {
             appDiv.innerHTML = renderList();
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) searchInput.value = searchQuery;
         }
     }
 
