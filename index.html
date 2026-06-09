@@ -11,9 +11,9 @@
         .card { background: white; border-radius: 20px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
         .badge { display: inline-block; padding: 6px 14px; border-radius: 30px; font-size: 14px; font-weight: 600; margin-bottom: 20px; }
-        .good { background: #dcfce7; color: #15803d; }
-        .expired { background: #fee2e2; color: #b91c1c; }
-        .no-date { background: #f1f5f9; color: #475569; }
+        .good { background: #dcfce7; color: #15803d; }      /* поверен */
+        .expired { background: #fee2e2; color: #b91c1c; }   /* не поверен */
+        .no-date { background: #f1f5f9; color: #475569; }   /* без поверки */
         .field { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
         .field-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
         .field-value { font-size: 16px; font-weight: 500; word-break: break-word; }
@@ -25,6 +25,8 @@
         .btn-add { background: #2563eb; }
         .btn-delete { background: #ef4444; }
         .btn-small { padding: 8px 16px; font-size: 13px; }
+        .btn-filter { background: #e2e8f0; color: #1e293b; margin-right: 8px; }
+        .btn-filter.active { background: #2563eb; color: white; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
         .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
@@ -40,9 +42,7 @@
         .qr-container canvas { margin: 10px auto; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px; background: white; }
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1100; }
         .search-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; margin-bottom: 16px; }
-        .filter-group { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-        .filter-btn { background: #e2e8f0; color: #1e293b; }
-        .filter-btn.active { background: #2563eb; color: white; }
+        .filter-group { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     </style>
 </head>
 <body>
@@ -61,7 +61,7 @@
     let currentInstruments = [];
     let currentHistory = [];
     let searchQuery = "";
-    let statusFilter = "all"; // all, verified, notVerified, noVerification
+    let statusFilter = "all"; // all, verified, expired, noDate
 
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
@@ -72,18 +72,22 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    // Новые функции статуса
-    function getStatusText(validUntil) {
-        if (!validUntil || validUntil === '-' || validUntil === '') return 'без поверки';
+    // Функция получения статуса (новые названия)
+    function getStatus(validUntil) {
+        if (!validUntil || validUntil === '-') return 'без поверки';
         const today = new Date().toISOString().slice(0,10);
         return validUntil < today ? 'не поверен' : 'поверен';
     }
 
-    function getStatusClass(validUntil) {
-        const status = getStatusText(validUntil);
-        if (status === 'поверен') return 'good';
-        if (status === 'не поверен') return 'expired';
-        return 'no-date';
+    // Подготовка ссылки для скачивания (добавляем ?dl=1 для Яндекс.Диска)
+    function getDownloadLink(url) {
+        if (!url) return '#';
+        if (url.includes('disk.yandex.ru')) {
+            // Добавляем параметр dl=1, если его нет
+            const separator = url.includes('?') ? '&' : '?';
+            return url + separator + 'dl=1';
+        }
+        return url;
     }
 
     async function saveToYandex() {
@@ -100,7 +104,7 @@
             if (!href) throw new Error("Нет ссылки для загрузки");
 
             const headersRow = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
-                                "Дата поверки", "Действительно до", "Ссылка на документ",
+                                "Дата поверки/калибровки", "Действительно до", "Ссылка на документ",
                                 "Кто взял", "Куда взял", "Дата выдачи"];
             const wsData = [
                 headersRow,
@@ -191,6 +195,7 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
+                    
                     let instruments = [];
                     const sheetInstr = workbook.Sheets["Приборы"];
                     if (sheetInstr) {
@@ -216,6 +221,7 @@
                             }
                         }
                     }
+                    
                     let history = [];
                     const sheetHist = workbook.Sheets["История"];
                     if (sheetHist) {
@@ -306,6 +312,15 @@
         }
     }
 
+    // Динамическая подпись дат в зависимости от типа
+    function updateDateLabels(type) {
+        const isCalibration = (type === 'Калибровка');
+        const verifLabel = document.getElementById('verifDateLabel');
+        const validLabel = document.getElementById('validDateLabel');
+        if (verifLabel) verifLabel.textContent = isCalibration ? 'Дата калибровки' : 'Дата поверки';
+        if (validLabel) validLabel.textContent = isCalibration ? 'Действительна до' : 'Действительно до';
+    }
+
     function showAddForm() {
         let maxId = 0;
         for (const inst of currentInstruments) {
@@ -318,14 +333,12 @@
             <div class="form-group"><label>Название прибора</label><input type="text" id="new_name" placeholder="Например: Мультиметр"></div>
             <div class="form-group"><label>Серийный номер</label><input type="text" id="new_serial" placeholder="Введите серийный номер"></div>
             <div class="form-group"><label>Модель</label><input type="text" id="new_model" placeholder="Модель"></div>
-            <div class="form-group"><label>Тип</label>
-                <select id="new_type">
-                    <option value="Поверка">Поверка</option>
-                    <option value="Калибровка">Калибровка</option>
-                </select>
-            </div>
-            <div class="form-group" id="new_date_group"><label>Дата поверки</label><input type="date" id="new_verif" value="${today}"></div>
-            <div class="form-group"><label>Действительно до</label><input type="date" id="new_valid" value="${today}"></div>
+            <div class="form-group"><label>Тип</label><select id="new_type">
+                <option value="Поверка">Поверка</option>
+                <option value="Калибровка">Калибровка</option>
+            </select></div>
+            <div class="form-group"><label id="verifDateLabel">Дата поверки</label><input type="date" id="new_verif" value="${today}"></div>
+            <div class="form-group"><label id="validDateLabel">Действительно до</label><input type="date" id="new_valid" value="${today}"></div>
             <div class="form-group"><label>Ссылка на документ</label><input type="text" id="new_doc" placeholder="https://..."></div>
             <div class="button-group">
                 <button class="btn btn-add" id="confirmAddBtn">➕ Добавить прибор</button>
@@ -333,6 +346,12 @@
             </div>
         `;
         showModal(`Добавление нового прибора (ID будет ${nextId})`, formHtml);
+        // Устанавливаем обработчики для динамической смены подписей
+        const typeSelect = document.getElementById('new_type');
+        if (typeSelect) {
+            updateDateLabels(typeSelect.value);
+            typeSelect.addEventListener('change', (e) => updateDateLabels(e.target.value));
+        }
         document.getElementById('confirmAddBtn').onclick = async () => {
             const newInstrument = {
                 id: String(nextId),
@@ -356,17 +375,6 @@
         document.getElementById('cancelAddBtn').onclick = () => {
             document.getElementById('customModal').style.display = 'none';
         };
-        const typeSelect = document.getElementById('new_type');
-        const dateGroup = document.getElementById('new_date_group');
-        if (typeSelect && dateGroup) {
-            const updateLabel = () => {
-                const label = dateGroup.querySelector('label');
-                if (typeSelect.value === 'Поверка') label.innerText = 'Дата поверки';
-                else label.innerText = 'Дата калибровки';
-            };
-            typeSelect.addEventListener('change', updateLabel);
-            updateLabel();
-        }
     }
 
     function showEditAllForm(instrument) {
@@ -375,14 +383,12 @@
             <div class="form-group"><label>Название прибора</label><input type="text" id="edit_name" value="${escapeHtml(instrument.name)}"></div>
             <div class="form-group"><label>Серийный номер</label><input type="text" id="edit_serial" value="${escapeHtml(instrument.serial_number)}"></div>
             <div class="form-group"><label>Модель</label><input type="text" id="edit_model" value="${escapeHtml(instrument.model)}"></div>
-            <div class="form-group"><label>Тип</label>
-                <select id="edit_type">
-                    <option value="Поверка" ${instrument.type === 'Поверка' ? 'selected' : ''}>Поверка</option>
-                    <option value="Калибровка" ${instrument.type === 'Калибровка' ? 'selected' : ''}>Калибровка</option>
-                </select>
-            </div>
-            <div class="form-group" id="edit_date_group"><label>Дата поверки</label><input type="date" id="edit_verif" value="${instrument.verification_date || ''}"></div>
-            <div class="form-group"><label>Действительно до</label><input type="date" id="edit_valid" value="${instrument.valid_until || ''}"></div>
+            <div class="form-group"><label>Тип</label><select id="edit_type">
+                <option value="Поверка" ${instrument.type === 'Поверка' ? 'selected' : ''}>Поверка</option>
+                <option value="Калибровка" ${instrument.type === 'Калибровка' ? 'selected' : ''}>Калибровка</option>
+            </select></div>
+            <div class="form-group"><label id="verifDateLabel">${instrument.type === 'Калибровка' ? 'Дата калибровки' : 'Дата поверки'}</label><input type="date" id="edit_verif" value="${instrument.verification_date || ''}"></div>
+            <div class="form-group"><label id="validDateLabel">${instrument.type === 'Калибровка' ? 'Действительна до' : 'Действительно до'}</label><input type="date" id="edit_valid" value="${instrument.valid_until || ''}"></div>
             <div class="form-group"><label>Ссылка на документ</label><input type="text" id="edit_doc" value="${escapeHtml(instrument.document_url)}"></div>
             <div class="form-group"><label>Кто взял</label><input type="text" id="edit_taken_by" value="${escapeHtml(instrument.taken_by)}"></div>
             <div class="form-group"><label>Куда взял</label><input type="text" id="edit_taken_where" value="${escapeHtml(instrument.taken_where)}"></div>
@@ -392,15 +398,10 @@
         `;
         showModal(`Редактирование #${instrument.id}`, formHtml);
         const typeSelect = document.getElementById('edit_type');
-        const dateGroup = document.getElementById('edit_date_group');
-        const updateLabel = () => {
-            const label = dateGroup.querySelector('label');
-            if (typeSelect.value === 'Поверка') label.innerText = 'Дата поверки';
-            else label.innerText = 'Дата калибровки';
-        };
-        if (typeSelect && dateGroup) {
-            typeSelect.addEventListener('change', updateLabel);
-            updateLabel();
+        if (typeSelect) {
+            const update = () => updateDateLabels(typeSelect.value);
+            update();
+            typeSelect.addEventListener('change', update);
         }
         document.getElementById('saveAllBtn').onclick = async () => {
             instrument.name = document.getElementById('edit_name').value;
@@ -472,8 +473,12 @@
     }
 
     function renderCard(inst) {
-        const statusText = getStatusText(inst.valid_until);
-        const statusClass = getStatusClass(inst.valid_until);
+        const status = getStatus(inst.valid_until);
+        let statusClass = '';
+        if (status === 'поверен') statusClass = 'good';
+        else if (status === 'не поверен') statusClass = 'expired';
+        else statusClass = 'no-date';
+        
         const hasTaken = inst.taken_by && inst.taken_by.trim() !== '';
         const takenHtml = hasTaken ? `
             <div class="issued-info">
@@ -482,17 +487,22 @@
                 <div class="field"><div class="field-label">Дата выдачи</div><div class="field-value">${escapeHtml(inst.taken_date) || '—'}</div></div>
             </div>
         ` : '';
-        const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">📄 Открыть документ</a>` : '—';
-        const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
+        
+        const dateLabel = (inst.type === 'Калибровка') ? 'Дата калибровки' : 'Дата поверки';
+        const validLabel = (inst.type === 'Калибровка') ? 'Действительна до' : 'Действительно до';
+        const docLink = inst.document_url && inst.document_url !== 'nan' 
+            ? `<a href="${getDownloadLink(inst.document_url)}" download target="_blank">📄 Открыть документ</a>` 
+            : '—';
+        
         return `
         <div class="card">
             <div class="title">${escapeHtml(inst.name)}</div>
-            <div class="badge ${statusClass}">${escapeHtml(statusText)}</div>
+            <div class="badge ${statusClass}">${status}</div>
             <div class="field"><div class="field-label">Серийный номер</div><div class="field-value">${escapeHtml(inst.serial_number) || '—'}</div></div>
             <div class="field"><div class="field-label">Модель</div><div class="field-value">${escapeHtml(inst.model) || '—'}</div></div>
             <div class="field"><div class="field-label">Тип</div><div class="field-value">${escapeHtml(inst.type) || '—'}</div></div>
             <div class="field"><div class="field-label">${dateLabel}</div><div class="field-value">${escapeHtml(inst.verification_date) || '—'}</div></div>
-            <div class="field"><div class="field-label">Действительно до</div><div class="field-value">${escapeHtml(inst.valid_until) || '—'}</div></div>
+            <div class="field"><div class="field-label">${validLabel}</div><div class="field-value">${escapeHtml(inst.valid_until) || '—'}</div></div>
             <div class="field"><div class="field-label">Документ</div><div class="field-value">${docLink}</div></div>
             ${takenHtml}
             <div class="button-group">
@@ -516,26 +526,43 @@
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
         let filtered = currentInstruments;
+        // Фильтр по статусу
+        if (statusFilter !== 'all') {
+            filtered = filtered.filter(inst => getStatus(inst.valid_until) === statusFilter);
+        }
+        // Поиск по названию
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
         }
-        if (statusFilter !== "all") {
-            filtered = filtered.filter(inst => getStatusText(inst.valid_until) === statusFilter);
-        }
         
         let html = '<div class="card"><h1>Оборудование</h1>';
+        // Фильтры
+        html += `<div class="filter-group">
+            <button class="btn-filter ${statusFilter === 'all' ? 'active' : ''}" onclick="setStatusFilter('all')">Все</button>
+            <button class="btn-filter ${statusFilter === 'поверен' ? 'active' : ''}" onclick="setStatusFilter('поверен')">Поверен</button>
+            <button class="btn-filter ${statusFilter === 'не поверен' ? 'active' : ''}" onclick="setStatusFilter('не поверен')">Не поверен</button>
+            <button class="btn-filter ${statusFilter === 'без поверки' ? 'active' : ''}" onclick="setStatusFilter('без поверки')">Без поверки</button>
+        </div>`;
         for (const inst of filtered) {
-            const statusText = getStatusText(inst.valid_until);
-            const statusClass = getStatusClass(inst.valid_until);
+            const status = getStatus(inst.valid_until);
+            let statusClass = '';
+            if (status === 'поверен') statusClass = 'good';
+            else if (status === 'не поверен') statusClass = 'expired';
+            else statusClass = 'no-date';
             const takenIcon = inst.taken_by ? '📤' : '✅';
             html += `<a href="?id=${encodeURIComponent(inst.id)}" class="list-item">
                 <span>#${escapeHtml(inst.id)} ${escapeHtml(inst.name)}</span>
-                <span><span class="badge ${statusClass}" style="margin:0;padding:4px 10px;">${escapeHtml(statusText)}</span> ${takenIcon}</span>
+                <span><span class="badge ${statusClass}" style="margin:0;padding:4px 10px;">${escapeHtml(status)}</span> ${takenIcon}</span>
             </a>`;
         }
         html += '</div>';
         return html;
+    }
+
+    function setStatusFilter(filter) {
+        statusFilter = filter;
+        renderApp();
     }
 
     function renderApp() {
@@ -556,12 +583,6 @@
                 <div class="card" id="searchCard">
                     <div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>
                     <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
-                    <div class="filter-group">
-                        <button class="btn filter-btn ${statusFilter === 'all' ? 'active' : ''}" data-filter="all">Все</button>
-                        <button class="btn filter-btn ${statusFilter === 'поверен' ? 'active' : ''}" data-filter="поверен">Поверен</button>
-                        <button class="btn filter-btn ${statusFilter === 'не поверен' ? 'active' : ''}" data-filter="не поверен">Не поверен</button>
-                        <button class="btn filter-btn ${statusFilter === 'без поверки' ? 'active' : ''}" data-filter="без поверки">Без поверки</button>
-                    </div>
                 </div>
                 <div id="listContainer"></div>
             `;
@@ -576,19 +597,11 @@
                 searchField.oninput = (e) => {
                     searchQuery = e.target.value;
                     const container = document.getElementById('listContainer');
-                    if (container) container.innerHTML = renderList();
+                    if (container) {
+                        container.innerHTML = renderList();
+                    }
                 };
             }
-            const filterButtons = document.querySelectorAll('.filter-btn');
-            filterButtons.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    statusFilter = btn.getAttribute('data-filter');
-                    filterButtons.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    const container = document.getElementById('listContainer');
-                    if (container) container.innerHTML = renderList();
-                });
-            });
         }
     }
 
