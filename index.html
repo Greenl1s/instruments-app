@@ -30,7 +30,7 @@
         .btn-small { padding: 8px 16px; font-size: 13px; }
         .btn-status { background: #e2e8f0; color: #1e293b; margin-right: 6px; }
         .btn-status.active { background: #2563eb; color: white; }
-        .btn-copy { background: #10b981; }
+        .btn-logout { background: #64748b; margin-left: auto; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
         .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
@@ -49,12 +49,28 @@
         .qr-container canvas { margin: 10px auto; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px; background: white; }
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1100; }
         .search-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; margin-bottom: 16px; }
-        .filter-group { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-        .filter-select { padding: 8px 12px; border-radius: 12px; border: 1px solid #cbd5e1; background: white; font-size: 14px; }
+        .filter-group { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+        .filter-btn { background: #e2e8f0; color: #1e293b; }
+        .filter-btn.active { background: #2563eb; color: white; }
+        .login-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 2000; }
+        .login-box { background: white; border-radius: 24px; padding: 32px; max-width: 400px; width: 90%; text-align: center; }
+        .login-box select, .login-box button { width: 100%; padding: 12px; margin-top: 15px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; }
+        .login-box button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
+        .user-welcome { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 15px; flex-wrap: wrap; }
     </style>
 </head>
 <body>
 <div class="container" id="app">Загрузка...</div>
+<div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+        <h2>Вход в систему</h2>
+        <select id="roleSelect">
+            <option value="admin">Администратор</option>
+            <option value="user">Пользователь</option>
+        </select>
+        <button id="loginBtn">Войти</button>
+    </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
@@ -69,9 +85,40 @@
     let currentInstruments = [];
     let currentHistory = [];
     let searchQuery = "";
-    let verificationFilter = "all";   // all, поверен, не поверен, без поверки
-    let conditionFilter = "all";      // all, free, busy, broken
+    let statusFilter = "all";
+    let currentUser = null;
 
+    // --- Управление сессией ---
+    function hasAccess(allowedRoles) {
+        if (!currentUser) return false;
+        return allowedRoles.includes(currentUser.role);
+    }
+
+    function logout() {
+        currentUser = null;
+        sessionStorage.removeItem('instrumentUser');
+        document.getElementById('loginOverlay').style.display = 'flex';
+        document.getElementById('app').innerHTML = '';
+    }
+
+    function login(role) {
+        currentUser = { role: role };
+        sessionStorage.setItem('instrumentUser', JSON.stringify(currentUser));
+        document.getElementById('loginOverlay').style.display = 'none';
+        renderApp();
+    }
+
+    function checkSession() {
+        const savedUser = sessionStorage.getItem('instrumentUser');
+        if (savedUser) {
+            currentUser = JSON.parse(savedUser);
+            document.getElementById('loginOverlay').style.display = 'none';
+        } else {
+            document.getElementById('loginOverlay').style.display = 'flex';
+        }
+    }
+
+    // --- Вспомогательные функции ---
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
         toast.className = 'toast';
@@ -92,7 +139,6 @@
         if (text === 'не поверен') return 'expired';
         return 'no-date';
     }
-
     function getConditionText(condition) {
         if (condition === 'busy') return 'занят';
         if (condition === 'broken') return 'не исправен';
@@ -326,6 +372,24 @@
         }
     }
 
+    function setCondition(instrument, condition) {
+        if (instrument.condition === condition) return;
+        instrument.condition = condition;
+        if (condition === 'broken') {
+            instrument.taken_by = '';
+            instrument.taken_where = '';
+            instrument.taken_date = '';
+        } else if (condition === 'free') {
+            if (instrument.taken_by) {
+                instrument.taken_by = '';
+                instrument.taken_where = '';
+                instrument.taken_date = '';
+            }
+        }
+        renderApp();
+        saveToYandex().then(() => showMessage(`Статус изменён на "${getConditionText(condition)}"`));
+    }
+
     function showAddForm() {
         let maxId = 0;
         for (const inst of currentInstruments) {
@@ -484,40 +548,6 @@
         };
     }
 
-    function setCondition(instrument, condition) {
-        if (instrument.condition === condition) return;
-        instrument.condition = condition;
-        if (condition === 'broken') {
-            instrument.taken_by = '';
-            instrument.taken_where = '';
-            instrument.taken_date = '';
-        } else if (condition === 'free') {
-            if (instrument.taken_by) {
-                instrument.taken_by = '';
-                instrument.taken_where = '';
-                instrument.taken_date = '';
-            }
-        }
-        renderApp();
-        saveToYandex().then(() => showMessage(`Статус изменён на "${getConditionText(condition)}"`));
-    }
-
-    function copyInstrumentInfo(inst) {
-        const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
-        const text = `Название: ${inst.name}
-Серийный номер: ${inst.serial_number || '—'}
-Модель: ${inst.model || '—'}
-Тип: ${inst.type || '—'}
-${dateLabel}: ${inst.verification_date || '—'}
-Действительно до: ${inst.valid_until || '—'}
-Ссылка на документ: ${inst.document_url || '—'}`;
-        navigator.clipboard.writeText(text).then(() => {
-            showMessage("✅ Информация скопирована в буфер обмена!");
-        }).catch(() => {
-            showMessage("❌ Не удалось скопировать текст", true);
-        });
-    }
-
     function escapeHtml(str) {
         if (!str) return '';
         return String(str).replace(/[&<>]/g, function(m) {
@@ -528,6 +558,7 @@ ${dateLabel}: ${inst.verification_date || '—'}
         });
     }
 
+    // --- Отображение карточки с учётом роли ---
     function renderCard(inst) {
         const verifText = getVerificationText(inst.valid_until);
         const verifClass = getVerificationClass(inst.valid_until);
@@ -543,6 +574,37 @@ ${dateLabel}: ${inst.verification_date || '—'}
         ` : '';
         const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">📄 Открыть документ</a>` : '—';
         const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
+
+        let adminButtonsHtml = '';
+        if (hasAccess(['admin'])) {
+            adminButtonsHtml = `
+                <div class="button-group" style="margin-top:0;">
+                    <button class="btn btn-status ${inst.condition === 'free' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'free')">Свободен</button>
+                    <button class="btn btn-status ${inst.condition === 'busy' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'busy')">Занят</button>
+                    <button class="btn btn-status ${inst.condition === 'broken' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'broken')">Не исправен</button>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>
+                    <button class="btn btn-clear" onclick="(() => { 
+                        const returnDate = new Date().toISOString().slice(0,10);
+                        closeHistoryEntry(currentInstrument, returnDate);
+                        currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
+                        if (currentInstrument.condition !== 'broken') currentInstrument.condition = 'free';
+                        renderApp(); 
+                        saveToYandex().then(() => showMessage('Выдача очищена!'));
+                    })()">📦 Положить прибор</button>
+                    <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
+                    <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">🗑️ Удалить прибор</button>
+                </div>
+            `;
+        } else {
+            adminButtonsHtml = `
+                <div class="issued-info" style="background: #e2e8f0; margin-top: 15px;">
+                    <div class="field"><div class="field-label">Статус выдачи</div><div class="field-value">${hasTaken ? `Взят: ${escapeHtml(inst.taken_by)}` : 'На месте'}</div></div>
+                </div>
+            `;
+        }
+
         return `
         <div class="card">
             <div class="title">${escapeHtml(inst.name)}</div>
@@ -557,25 +619,9 @@ ${dateLabel}: ${inst.verification_date || '—'}
             <div class="field"><div class="field-label">Действительно до</div><div class="field-value">${escapeHtml(inst.valid_until) || '—'}</div></div>
             <div class="field"><div class="field-label">Документ</div><div class="field-value">${docLink}</div></div>
             ${takenHtml}
+            ${adminButtonsHtml}
             <div class="button-group">
-                <button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>
-                <button class="btn btn-clear" onclick="(() => { 
-                    const returnDate = new Date().toISOString().slice(0,10);
-                    closeHistoryEntry(currentInstrument, returnDate);
-                    currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
-                    if (currentInstrument.condition !== 'broken') currentInstrument.condition = 'free';
-                    renderApp(); 
-                    saveToYandex().then(() => showMessage('Выдача очищена!'));
-                })()">📦 Положить прибор</button>
-                <div class="button-group" style="margin-top:0;">
-                    <button class="btn btn-status ${inst.condition === 'free' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'free')">Свободен</button>
-                    <button class="btn btn-status ${inst.condition === 'busy' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'busy')">Занят</button>
-                    <button class="btn btn-status ${inst.condition === 'broken' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'broken')">Не исправен</button>
-                </div>
-                <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
-                <button class="btn btn-copy" onclick="copyInstrumentInfo(currentInstrument)">📋 Копировать информацию</button>
-                <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">🗑️ Удалить прибор</button>
                 <a href="?" class="btn btn-clear">← К списку</a>
             </div>
         </div>`;
@@ -585,21 +631,25 @@ ${dateLabel}: ${inst.verification_date || '—'}
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
         let filtered = currentInstruments;
-        // Поиск по названию
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
         }
-        // Фильтр по статусу поверки
-        if (verificationFilter !== "all") {
-            filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === verificationFilter);
-        }
-        // Фильтр по состоянию (свободен/занят/не исправен)
-        if (conditionFilter !== "all") {
-            filtered = filtered.filter(inst => inst.condition === conditionFilter);
+        if (statusFilter !== "all") {
+            filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === statusFilter);
         }
         
         let html = '<div class="card"><h1>Оборудование</h1>';
+        if (hasAccess(['admin'])) {
+            html += `<div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>`;
+        }
+        html += `<input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">`;
+        html += `<div class="filter-group">
+                    <button class="btn filter-btn ${statusFilter === 'all' ? 'active' : ''}" data-filter="all">Все</button>
+                    <button class="btn filter-btn ${statusFilter === 'поверен' ? 'active' : ''}" data-filter="поверен">Поверен</button>
+                    <button class="btn filter-btn ${statusFilter === 'не поверен' ? 'active' : ''}" data-filter="не поверен">Не поверен</button>
+                    <button class="btn filter-btn ${statusFilter === 'без поверки' ? 'active' : ''}" data-filter="без поверки">Без поверки</button>
+                </div>`;
         for (const inst of filtered) {
             const verifText = getVerificationText(inst.valid_until);
             const verifClass = getVerificationClass(inst.valid_until);
@@ -617,71 +667,58 @@ ${dateLabel}: ${inst.verification_date || '—'}
         return html;
     }
 
+    function bindSearchAndFilterEvents() {
+        const searchField = document.getElementById('globalSearchInput');
+        if (searchField) {
+            searchField.value = searchQuery;
+            const newSearch = searchField.cloneNode(true);
+            searchField.parentNode.replaceChild(newSearch, searchField);
+            newSearch.addEventListener('input', (e) => {
+                searchQuery = e.target.value;
+                const container = document.getElementById('listContainer');
+                if (container) container.innerHTML = renderList();
+                bindSearchAndFilterEvents();
+            });
+        }
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        filterButtons.forEach(btn => {
+            btn.removeEventListener('click', handleFilterClick);
+            btn.addEventListener('click', handleFilterClick);
+        });
+    }
+
+    function handleFilterClick(e) {
+        statusFilter = e.currentTarget.getAttribute('data-filter');
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        const container = document.getElementById('listContainer');
+        if (container) container.innerHTML = renderList();
+        bindSearchAndFilterEvents();
+    }
+
     function renderApp() {
+        if (!currentUser) return;
         const urlParams = new URLSearchParams(window.location.search);
         const id = urlParams.get('id');
         const appDiv = document.getElementById('app');
         if (!appDiv) return;
+        const welcomeHtml = `
+            <div class="card user-welcome">
+                <span>👋 Вы вошли как: <strong>${currentUser.role === 'admin' ? 'Администратор' : 'Пользователь'}</strong></span>
+                <button class="btn btn-logout" onclick="logout()">Выйти</button>
+            </div>
+        `;
         if (id) {
             const inst = currentInstruments.find(i => String(i.id) === id);
             if (inst) {
                 window.currentInstrument = inst;
-                appDiv.innerHTML = renderCard(inst);
+                appDiv.innerHTML = welcomeHtml + renderCard(inst);
             } else {
-                appDiv.innerHTML = `<div class="error">Прибор не найден<br><a href="?" style="color:#2563eb;">← Назад</a></div>`;
+                appDiv.innerHTML = welcomeHtml + `<div class="card error">Прибор не найден<br><a href="?" style="color:#2563eb;">← Назад</a></div>`;
             }
         } else {
-            const headerHtml = `
-                <div class="card" id="searchCard">
-                    <div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>
-                    <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
-                    <div class="filter-group">
-                        <select id="verificationSelect" class="filter-select">
-                            <option value="all" ${verificationFilter === 'all' ? 'selected' : ''}>Все (поверка)</option>
-                            <option value="поверен" ${verificationFilter === 'поверен' ? 'selected' : ''}>Поверен</option>
-                            <option value="не поверен" ${verificationFilter === 'не поверен' ? 'selected' : ''}>Не поверен</option>
-                            <option value="без поверки" ${verificationFilter === 'без поверки' ? 'selected' : ''}>Без поверки</option>
-                        </select>
-                        <select id="conditionSelect" class="filter-select">
-                            <option value="all" ${conditionFilter === 'all' ? 'selected' : ''}>Все (состояние)</option>
-                            <option value="free" ${conditionFilter === 'free' ? 'selected' : ''}>Свободен</option>
-                            <option value="busy" ${conditionFilter === 'busy' ? 'selected' : ''}>Занят</option>
-                            <option value="broken" ${conditionFilter === 'broken' ? 'selected' : ''}>Не исправен</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="listContainer"></div>
-            `;
-            appDiv.innerHTML = headerHtml;
-            const listContainer = document.getElementById('listContainer');
-            if (listContainer) {
-                listContainer.innerHTML = renderList();
-            }
-            const searchField = document.getElementById('globalSearchInput');
-            if (searchField) {
-                searchField.value = searchQuery;
-                searchField.oninput = (e) => {
-                    searchQuery = e.target.value;
-                    const container = document.getElementById('listContainer');
-                    if (container) container.innerHTML = renderList();
-                };
-            }
-            const verificationSelect = document.getElementById('verificationSelect');
-            if (verificationSelect) {
-                verificationSelect.addEventListener('change', (e) => {
-                    verificationFilter = e.target.value;
-                    const container = document.getElementById('listContainer');
-                    if (container) container.innerHTML = renderList();
-                });
-            }
-            const conditionSelect = document.getElementById('conditionSelect');
-            if (conditionSelect) {
-                conditionSelect.addEventListener('change', (e) => {
-                    conditionFilter = e.target.value;
-                    const container = document.getElementById('listContainer');
-                    if (container) container.innerHTML = renderList();
-                });
-            }
+            appDiv.innerHTML = welcomeHtml + renderList();
+            bindSearchAndFilterEvents();
         }
     }
 
@@ -690,12 +727,37 @@ ${dateLabel}: ${inst.verification_date || '—'}
             const { instruments, history } = await getTableData();
             currentInstruments = instruments;
             currentHistory = history;
-            renderApp();
+            checkSession();
+            if (currentUser) {
+                renderApp();
+            } else {
+                document.getElementById('app').innerHTML = '';
+            }
         } catch(e) {
             document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте прокси и публичный ключ.</div>`;
             console.error(e);
         }
     })();
+
+    document.getElementById('loginBtn').addEventListener('click', () => {
+        const role = document.getElementById('roleSelect').value;
+        login(role);
+        if (currentInstruments.length === 0) {
+            (async () => {
+                try {
+                    const { instruments, history } = await getTableData();
+                    currentInstruments = instruments;
+                    currentHistory = history;
+                    renderApp();
+                } catch(e) {
+                    document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте прокси и публичный ключ.</div>`;
+                    console.error(e);
+                }
+            })();
+        } else {
+            renderApp();
+        }
+    });
 </script>
 </body>
 </html>
