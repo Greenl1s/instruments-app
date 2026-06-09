@@ -40,6 +40,9 @@
         .qr-container canvas { margin: 10px auto; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px; background: white; }
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1100; }
         .search-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; margin-bottom: 16px; }
+        .filter-group { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+        .filter-btn { background: #e2e8f0; color: #1e293b; }
+        .filter-btn.active { background: #2563eb; color: white; }
     </style>
 </head>
 <body>
@@ -56,8 +59,9 @@
     // ================================
 
     let currentInstruments = [];
-    let currentHistory = [];   // история выдач
+    let currentHistory = [];
     let searchQuery = "";
+    let statusFilter = "all"; // all, verified, notVerified, noVerification
 
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
@@ -68,7 +72,20 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    // Сохранение двух листов на Яндекс.Диск
+    // Новые функции статуса
+    function getStatusText(validUntil) {
+        if (!validUntil || validUntil === '-' || validUntil === '') return 'без поверки';
+        const today = new Date().toISOString().slice(0,10);
+        return validUntil < today ? 'не поверен' : 'поверен';
+    }
+
+    function getStatusClass(validUntil) {
+        const status = getStatusText(validUntil);
+        if (status === 'поверен') return 'good';
+        if (status === 'не поверен') return 'expired';
+        return 'no-date';
+    }
+
     async function saveToYandex() {
         try {
             const proxyBase = PROXY_URL.split('?')[0];
@@ -82,7 +99,6 @@
             const { href } = await response.json();
             if (!href) throw new Error("Нет ссылки для загрузки");
 
-            // Лист "Приборы"
             const headersRow = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
                                 "Дата поверки", "Действительно до", "Ссылка на документ",
                                 "Кто взял", "Куда взял", "Дата выдачи"];
@@ -96,7 +112,6 @@
             ];
             const wsInstruments = XLSX.utils.aoa_to_sheet(wsData);
 
-            // Лист "История"
             const historyHeaders = ["ID прибора", "Название", "Кто взял", "Куда взял", "Дата выдачи", "Дата возврата"];
             const historyData = [
                 historyHeaders,
@@ -125,7 +140,6 @@
         }
     }
 
-    // Добавление записи в историю при выдаче
     function addHistoryEntry(instrument, takenBy, takenWhere, issuedDate) {
         currentHistory.push({
             id: instrument.id,
@@ -137,7 +151,6 @@
         });
     }
 
-    // Обновление истории при возврате (ищем последнюю незакрытую запись)
     function closeHistoryEntry(instrument, returnDate) {
         for (let i = currentHistory.length - 1; i >= 0; i--) {
             if (currentHistory[i].id === instrument.id && !currentHistory[i].returnDate) {
@@ -145,7 +158,6 @@
                 return true;
             }
         }
-        // Если не нашли – создаём запись-возврат без выдачи (на всякий случай)
         currentHistory.push({
             id: instrument.id,
             name: instrument.name,
@@ -157,7 +169,6 @@
         return false;
     }
 
-    // Загрузка данных (читаем оба листа)
     async function getTableData() {
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
@@ -180,8 +191,6 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-                    
-                    // Читаем лист "Приборы"
                     let instruments = [];
                     const sheetInstr = workbook.Sheets["Приборы"];
                     if (sheetInstr) {
@@ -207,8 +216,6 @@
                             }
                         }
                     }
-                    
-                    // Читаем лист "История"
                     let history = [];
                     const sheetHist = workbook.Sheets["История"];
                     if (sheetHist) {
@@ -246,12 +253,6 @@
             if (!isNaN(date.getTime())) return date.toISOString().slice(0,10);
         }
         return str.slice(0,10);
-    }
-
-    function getStatus(validUntil) {
-        if (!validUntil || validUntil === '-') return 'без срока';
-        const today = new Date().toISOString().slice(0,10);
-        return validUntil < today ? 'просрочен' : 'годен';
     }
 
     function showModal(title, content) {
@@ -294,7 +295,6 @@
             const index = currentInstruments.findIndex(i => i.id === instrument.id);
             if (index !== -1) {
                 currentInstruments.splice(index, 1);
-                // Также можно удалить связанную историю, но оставим для истории
                 await saveToYandex();
                 renderApp();
                 showMessage(`✅ Прибор "${instrument.name}" удалён!`);
@@ -318,8 +318,13 @@
             <div class="form-group"><label>Название прибора</label><input type="text" id="new_name" placeholder="Например: Мультиметр"></div>
             <div class="form-group"><label>Серийный номер</label><input type="text" id="new_serial" placeholder="Введите серийный номер"></div>
             <div class="form-group"><label>Модель</label><input type="text" id="new_model" placeholder="Модель"></div>
-            <div class="form-group"><label>Тип документа</label><input type="text" id="new_type" placeholder="Поверка/Калибровка"></div>
-            <div class="form-group"><label>Дата поверки</label><input type="date" id="new_verif" value="${today}"></div>
+            <div class="form-group"><label>Тип</label>
+                <select id="new_type">
+                    <option value="Поверка">Поверка</option>
+                    <option value="Калибровка">Калибровка</option>
+                </select>
+            </div>
+            <div class="form-group" id="new_date_group"><label>Дата поверки</label><input type="date" id="new_verif" value="${today}"></div>
             <div class="form-group"><label>Действительно до</label><input type="date" id="new_valid" value="${today}"></div>
             <div class="form-group"><label>Ссылка на документ</label><input type="text" id="new_doc" placeholder="https://..."></div>
             <div class="button-group">
@@ -334,7 +339,7 @@
                 name: document.getElementById('new_name').value || "Новый прибор",
                 serial_number: document.getElementById('new_serial').value || "",
                 model: document.getElementById('new_model').value || "",
-                type: document.getElementById('new_type').value || "",
+                type: document.getElementById('new_type').value,
                 verification_date: document.getElementById('new_verif').value || "",
                 valid_until: document.getElementById('new_valid').value || "",
                 document_url: document.getElementById('new_doc').value || "",
@@ -351,6 +356,17 @@
         document.getElementById('cancelAddBtn').onclick = () => {
             document.getElementById('customModal').style.display = 'none';
         };
+        const typeSelect = document.getElementById('new_type');
+        const dateGroup = document.getElementById('new_date_group');
+        if (typeSelect && dateGroup) {
+            const updateLabel = () => {
+                const label = dateGroup.querySelector('label');
+                if (typeSelect.value === 'Поверка') label.innerText = 'Дата поверки';
+                else label.innerText = 'Дата калибровки';
+            };
+            typeSelect.addEventListener('change', updateLabel);
+            updateLabel();
+        }
     }
 
     function showEditAllForm(instrument) {
@@ -359,8 +375,13 @@
             <div class="form-group"><label>Название прибора</label><input type="text" id="edit_name" value="${escapeHtml(instrument.name)}"></div>
             <div class="form-group"><label>Серийный номер</label><input type="text" id="edit_serial" value="${escapeHtml(instrument.serial_number)}"></div>
             <div class="form-group"><label>Модель</label><input type="text" id="edit_model" value="${escapeHtml(instrument.model)}"></div>
-            <div class="form-group"><label>Тип документа</label><input type="text" id="edit_type" value="${escapeHtml(instrument.type)}"></div>
-            <div class="form-group"><label>Дата поверки</label><input type="date" id="edit_verif" value="${instrument.verification_date || ''}"></div>
+            <div class="form-group"><label>Тип</label>
+                <select id="edit_type">
+                    <option value="Поверка" ${instrument.type === 'Поверка' ? 'selected' : ''}>Поверка</option>
+                    <option value="Калибровка" ${instrument.type === 'Калибровка' ? 'selected' : ''}>Калибровка</option>
+                </select>
+            </div>
+            <div class="form-group" id="edit_date_group"><label>Дата поверки</label><input type="date" id="edit_verif" value="${instrument.verification_date || ''}"></div>
             <div class="form-group"><label>Действительно до</label><input type="date" id="edit_valid" value="${instrument.valid_until || ''}"></div>
             <div class="form-group"><label>Ссылка на документ</label><input type="text" id="edit_doc" value="${escapeHtml(instrument.document_url)}"></div>
             <div class="form-group"><label>Кто взял</label><input type="text" id="edit_taken_by" value="${escapeHtml(instrument.taken_by)}"></div>
@@ -370,6 +391,17 @@
             <button class="btn btn-clear" id="cancelAllBtn">Отмена</button>
         `;
         showModal(`Редактирование #${instrument.id}`, formHtml);
+        const typeSelect = document.getElementById('edit_type');
+        const dateGroup = document.getElementById('edit_date_group');
+        const updateLabel = () => {
+            const label = dateGroup.querySelector('label');
+            if (typeSelect.value === 'Поверка') label.innerText = 'Дата поверки';
+            else label.innerText = 'Дата калибровки';
+        };
+        if (typeSelect && dateGroup) {
+            typeSelect.addEventListener('change', updateLabel);
+            updateLabel();
+        }
         document.getElementById('saveAllBtn').onclick = async () => {
             instrument.name = document.getElementById('edit_name').value;
             instrument.serial_number = document.getElementById('edit_serial').value;
@@ -405,7 +437,6 @@
             const newTakenBy = document.getElementById('takenBy').value;
             const newTakenWhere = document.getElementById('takenWhere').value;
             const newTakenDate = document.getElementById('takenDate').value;
-            // Добавляем запись в историю
             if (newTakenBy && newTakenWhere && newTakenDate) {
                 addHistoryEntry(instrument, newTakenBy, newTakenWhere, newTakenDate);
             }
@@ -418,7 +449,6 @@
             showMessage("✅ Выдача сохранена!");
         };
         document.getElementById('clearBtn').onclick = async () => {
-            // При возврате закрываем последнюю запись в истории
             const returnDate = new Date().toISOString().slice(0,10);
             closeHistoryEntry(instrument, returnDate);
             instrument.taken_by = '';
@@ -442,8 +472,8 @@
     }
 
     function renderCard(inst) {
-        const status = getStatus(inst.valid_until);
-        const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
+        const statusText = getStatusText(inst.valid_until);
+        const statusClass = getStatusClass(inst.valid_until);
         const hasTaken = inst.taken_by && inst.taken_by.trim() !== '';
         const takenHtml = hasTaken ? `
             <div class="issued-info">
@@ -453,15 +483,16 @@
             </div>
         ` : '';
         const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">📄 Открыть документ</a>` : '—';
+        const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
         return `
         <div class="card">
             <div class="title">${escapeHtml(inst.name)}</div>
-            <div class="badge ${statusClass}">${escapeHtml(status)}</div>
+            <div class="badge ${statusClass}">${escapeHtml(statusText)}</div>
             <div class="field"><div class="field-label">Серийный номер</div><div class="field-value">${escapeHtml(inst.serial_number) || '—'}</div></div>
             <div class="field"><div class="field-label">Модель</div><div class="field-value">${escapeHtml(inst.model) || '—'}</div></div>
             <div class="field"><div class="field-label">Тип</div><div class="field-value">${escapeHtml(inst.type) || '—'}</div></div>
-            <div class="field"><div class="field-label">Дата поверки</div><div class="field-value">${escapeHtml(inst.verification_date) || '—'}</div></div>
-            <div class="field"><div class="field-label">Действителен до</div><div class="field-value">${escapeHtml(inst.valid_until) || '—'}</div></div>
+            <div class="field"><div class="field-label">${dateLabel}</div><div class="field-value">${escapeHtml(inst.verification_date) || '—'}</div></div>
+            <div class="field"><div class="field-label">Действительно до</div><div class="field-value">${escapeHtml(inst.valid_until) || '—'}</div></div>
             <div class="field"><div class="field-label">Документ</div><div class="field-value">${docLink}</div></div>
             ${takenHtml}
             <div class="button-group">
@@ -487,18 +518,20 @@
         let filtered = currentInstruments;
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
-            filtered = currentInstruments.filter(inst => inst.name.toLowerCase().includes(query));
+            filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
+        }
+        if (statusFilter !== "all") {
+            filtered = filtered.filter(inst => getStatusText(inst.valid_until) === statusFilter);
         }
         
         let html = '<div class="card"><h1>Оборудование</h1>';
-        html += `<div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>`;
         for (const inst of filtered) {
-            const status = getStatus(inst.valid_until);
-            const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
+            const statusText = getStatusText(inst.valid_until);
+            const statusClass = getStatusClass(inst.valid_until);
             const takenIcon = inst.taken_by ? '📤' : '✅';
             html += `<a href="?id=${encodeURIComponent(inst.id)}" class="list-item">
                 <span>#${escapeHtml(inst.id)} ${escapeHtml(inst.name)}</span>
-                <span><span class="badge ${statusClass}" style="margin:0;padding:4px 10px;">${escapeHtml(status)}</span> ${takenIcon}</span>
+                <span><span class="badge ${statusClass}" style="margin:0;padding:4px 10px;">${escapeHtml(statusText)}</span> ${takenIcon}</span>
             </a>`;
         }
         html += '</div>';
@@ -523,6 +556,12 @@
                 <div class="card" id="searchCard">
                     <div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>
                     <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
+                    <div class="filter-group">
+                        <button class="btn filter-btn ${statusFilter === 'all' ? 'active' : ''}" data-filter="all">Все</button>
+                        <button class="btn filter-btn ${statusFilter === 'поверен' ? 'active' : ''}" data-filter="поверен">Поверен</button>
+                        <button class="btn filter-btn ${statusFilter === 'не поверен' ? 'active' : ''}" data-filter="не поверен">Не поверен</button>
+                        <button class="btn filter-btn ${statusFilter === 'без поверки' ? 'active' : ''}" data-filter="без поверки">Без поверки</button>
+                    </div>
                 </div>
                 <div id="listContainer"></div>
             `;
@@ -537,11 +576,19 @@
                 searchField.oninput = (e) => {
                     searchQuery = e.target.value;
                     const container = document.getElementById('listContainer');
-                    if (container) {
-                        container.innerHTML = renderList();
-                    }
+                    if (container) container.innerHTML = renderList();
                 };
             }
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            filterButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    statusFilter = btn.getAttribute('data-filter');
+                    filterButtons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const container = document.getElementById('listContainer');
+                    if (container) container.innerHTML = renderList();
+                });
+            });
         }
     }
 
