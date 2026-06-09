@@ -22,7 +22,6 @@
         .btn-edit { background: #eab308; color: #1e293b; }
         .btn-clear { background: #64748b; }
         .btn-qr { background: #8b5cf6; }
-        .btn-save { background: #10b981; }
         .btn-add { background: #2563eb; }
         .btn-delete { background: #ef4444; }
         .btn-small { padding: 8px 16px; font-size: 13px; }
@@ -402,7 +401,6 @@
         
         let html = '<div class="card"><h1>Оборудование</h1>';
         html += `<div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>`;
-        html += `<input type="text" class="search-box" id="searchInput" placeholder="🔍 Поиск по названию...">`;
         for (const inst of filtered) {
             const status = getStatus(inst.valid_until);
             const statusClass = status === 'годен' ? 'good' : (status === 'просрочен' ? 'expired' : 'no-date');
@@ -414,24 +412,6 @@
         }
         html += '</div>';
         return html;
-    }
-
-    function bindSearchEvents() {
-        const searchInput = document.getElementById('searchInput');
-        if (searchInput) {
-            const newSearch = searchInput.cloneNode(true);
-            searchInput.parentNode.replaceChild(newSearch, searchInput);
-            newSearch.addEventListener('input', function(e) {
-                searchQuery = e.target.value;
-                if (!window.location.search.includes('id=')) {
-                    const appDiv = document.getElementById('app');
-                    if (appDiv) {
-                        appDiv.innerHTML = renderList();
-                        bindSearchEvents();
-                    }
-                }
-            });
-        }
     }
 
     function renderApp() {
@@ -448,8 +428,30 @@
                 appDiv.innerHTML = `<div class="error">Прибор не найден<br><a href="?" style="color:#2563eb;">← Назад</a></div>`;
             }
         } else {
-            appDiv.innerHTML = renderList();
-            bindSearchEvents();
+            // На главной странице статическое поле поиска и список
+            const headerHtml = `
+                <div class="card" id="searchCard">
+                    <div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>
+                    <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
+                </div>
+                <div id="listContainer"></div>
+            `;
+            appDiv.innerHTML = headerHtml;
+            const listContainer = document.getElementById('listContainer');
+            if (listContainer) {
+                listContainer.innerHTML = renderList();
+            }
+            const searchField = document.getElementById('globalSearchInput');
+            if (searchField) {
+                searchField.value = searchQuery;
+                searchField.oninput = (e) => {
+                    searchQuery = e.target.value;
+                    const container = document.getElementById('listContainer');
+                    if (container) {
+                        container.innerHTML = renderList();
+                    }
+                };
+            }
         }
     }
 
