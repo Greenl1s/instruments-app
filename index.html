@@ -86,8 +86,8 @@
     let currentInstruments = [];
     let currentHistory = [];
     let searchQuery = "";
-    let verificationFilter = "all";   // all, поверен, не поверен, без поверки
-    let conditionFilter = "all";      // all, свободен, занят, не исправен
+    let verificationFilter = "all";
+    let conditionFilter = "all";
     let currentUser = null;
 
     // --- Управление сессией ---
@@ -560,7 +560,7 @@
         });
     }
 
-    // --- Карточка прибора ---
+    // --- Карточка прибора с исправленными кнопками и копированием ---
     function renderCard(inst) {
         const verifText = getVerificationText(inst.valid_until);
         const verifClass = getVerificationClass(inst.valid_until);
@@ -577,41 +577,53 @@
         const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">📄 Открыть документ</a>` : '—';
         const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
 
-        let adminButtonsHtml = '';
+        // Кнопка копирования информации (работает для всех)
+        const copyInfo = () => {
+            const text = `Название: ${inst.name}\nСерийный номер: ${inst.serial_number || '—'}\nМодель: ${inst.model || '—'}\nТип: ${inst.type || '—'}\n${dateLabel}: ${inst.verification_date || '—'}\nДействительно до: ${inst.valid_until || '—'}`;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => showMessage("✅ Информация скопирована!")).catch(() => showMessage("❌ Ошибка копирования", true));
+            } else {
+                // fallback для старых браузеров
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showMessage("✅ Информация скопирована!");
+            }
+        };
+
+        // Кнопки выдачи (взаимоисключающие)
+        let issueButtons = '';
+        if (hasTaken) {
+            issueButtons = `<button class="btn btn-clear" onclick="(() => { 
+                const returnDate = new Date().toISOString().slice(0,10);
+                closeHistoryEntry(currentInstrument, returnDate);
+                currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
+                if (currentInstrument.condition !== 'broken') currentInstrument.condition = 'free';
+                renderApp(); 
+                saveToYandex().then(() => showMessage('Прибор возвращён!'));
+            })()">📦 Положить прибор</button>`;
+        } else {
+            issueButtons = `<button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>`;
+        }
+
+        // Блок для администратора (дополнительные кнопки)
+        let adminExtraHtml = '';
         if (hasAccess(['admin'])) {
-            adminButtonsHtml = `
+            adminExtraHtml = `
                 <div class="button-group" style="margin-top:0;">
                     <button class="btn btn-status ${inst.condition === 'free' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'free')">Свободен</button>
                     <button class="btn btn-status ${inst.condition === 'busy' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'busy')">Занят</button>
                     <button class="btn btn-status ${inst.condition === 'broken' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'broken')">Не исправен</button>
                 </div>
                 <div class="button-group">
-                    <button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>
-                    <button class="btn btn-clear" onclick="(() => { 
-                        const returnDate = new Date().toISOString().slice(0,10);
-                        closeHistoryEntry(currentInstrument, returnDate);
-                        currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
-                        if (currentInstrument.condition !== 'broken') currentInstrument.condition = 'free';
-                        renderApp(); 
-                        saveToYandex().then(() => showMessage('Выдача очищена!'));
-                    })()">📦 Положить прибор</button>
                     <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
                     <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">🗑️ Удалить прибор</button>
                 </div>
             `;
-        } else {
-            adminButtonsHtml = `
-                <div class="issued-info" style="background: #e2e8f0; margin-top: 15px;">
-                    <div class="field"><div class="field-label">Статус выдачи</div><div class="field-value">${hasTaken ? `Взят: ${escapeHtml(inst.taken_by)}` : 'На месте'}</div></div>
-                </div>
-            `;
         }
-
-        // Функция копирования
-        const copyInfo = () => {
-            const text = `Название: ${inst.name}\nСерийный номер: ${inst.serial_number || '—'}\nМодель: ${inst.model || '—'}\nТип: ${inst.type || '—'}\n${dateLabel}: ${inst.verification_date || '—'}\nДействительно до: ${inst.valid_until || '—'}`;
-            navigator.clipboard.writeText(text).then(() => showMessage("✅ Информация скопирована!")).catch(() => showMessage("❌ Ошибка копирования", true));
-        };
 
         return `
         <div class="card">
@@ -627,8 +639,9 @@
             <div class="field"><div class="field-label">Действительно до</div><div class="field-value">${escapeHtml(inst.valid_until) || '—'}</div></div>
             <div class="field"><div class="field-label">Документ</div><div class="field-value">${docLink}</div></div>
             ${takenHtml}
-            ${adminButtonsHtml}
+            ${adminExtraHtml}
             <div class="button-group">
+                ${issueButtons}
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
                 <button class="btn btn-edit" onclick="copyInfo()">📋 Копировать информацию</button>
                 <a href="?" class="btn btn-clear">← К списку</a>
@@ -641,27 +654,23 @@
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
         let filtered = currentInstruments;
-        // Поиск
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
         }
-        // Фильтр по поверке
         if (verificationFilter !== "all") {
             filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === verificationFilter);
         }
-        // Фильтр по состоянию
         if (conditionFilter !== "all") {
             filtered = filtered.filter(inst => getConditionText(inst.condition) === conditionFilter);
         }
         
         let html = '<div class="card"><h1>Оборудование</h1>';
-        // Верхняя строка с кнопкой "Добавить прибор" и селектами фильтров
         html += `<div class="filter-row">`;
         if (hasAccess(['admin'])) {
             html += `<button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button>`;
         } else {
-            html += `<div></div>`; // пустой отступ для выравнивания
+            html += `<div></div>`;
         }
         html += `<div class="filter-selects">
                     <select id="verifFilterSelect" class="filter-select">
@@ -715,7 +724,6 @@
             return;
         }
         
-        // Блок пользователя (только роль)
         const roleText = currentUser.role === 'admin' ? 'Администратор' : 'Пользователь';
         const userHtml = `
             <div class="user-info">
@@ -725,7 +733,6 @@
                 </div>
             </div>
         `;
-        // Карточка поиска
         const searchCardHtml = `
             <div class="card">
                 <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
@@ -735,11 +742,9 @@
         
         appDiv.innerHTML = userHtml + searchCardHtml + listContainerHtml;
         
-        // Обновляем список
         const container = document.getElementById('listContainer');
         if (container) container.innerHTML = renderListContainer();
         
-        // Поиск
         const searchField = document.getElementById('globalSearchInput');
         if (searchField) {
             searchField.value = searchQuery;
