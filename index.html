@@ -3,17 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>РЈС‡С‘С‚ РїСЂРёР±РѕСЂРѕРІ</title>
+    <title>Учёт приборов</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; }
+        .container { max-width: 700px; margin: 0 auto; }
         .card { background: white; border-radius: 20px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
         .badge { display: inline-block; padding: 6px 14px; border-radius: 30px; font-size: 14px; font-weight: 600; margin-bottom: 20px; }
         .good { background: #dcfce7; color: #15803d; }
-        .expired { background: #fee2e2; color: #b91c1c; }
+        .expired { background: #fed7aa; color: #9a3412; }
         .no-date { background: #f1f5f9; color: #475569; }
+        .status-free { background: #dcfce7; color: #15803d; }
+        .status-busy { background: #fef3c7; color: #b45309; }
+        .status-broken { background: #fee2e2; color: #b91c1c; }
         .field { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
         .field-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
         .field-value { font-size: 16px; font-weight: 500; word-break: break-word; }
@@ -22,14 +25,24 @@
         .btn-edit { background: #eab308; color: #1e293b; }
         .btn-clear { background: #64748b; }
         .btn-qr { background: #8b5cf6; }
-        .btn-save { background: #10b981; }
+        .btn-add { background: #2563eb; }
+        .btn-add-user { background: #38bdf8; }
+        .btn-delete { background: #ef4444; }
         .btn-small { padding: 8px 16px; font-size: 13px; }
+        .btn-status { background: #e2e8f0; color: #1e293b; margin-right: 6px; }
+        .btn-status.active { background: #2563eb; color: white; }
+        .btn-logout { background: #ef4444; color: white; border: none; }
+        .user-info { display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        .user-card { background: white; border-radius: 20px; padding: 12px 24px; display: inline-flex; align-items: center; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
         .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
         .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: white; border-radius: 24px; padding: 24px; max-width: 500px; width: 90%; margin: 20px; max-height: 90vh; overflow-y: auto; text-align: left; }
-        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border-bottom: 1px solid #e2e8f0; text-decoration: none; color: #1e293b; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border-bottom: 1px solid #e2e8f0; text-decoration: none; color: #1e293b; flex-wrap: wrap; gap: 8px; }
+        .status-group { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 30px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+        .list-item .badge { margin: 0; padding: 4px 10px; white-space: nowrap; }
         .list-item:hover { background: #f8fafc; }
         .loading, .error { text-align: center; padding: 40px; color: #64748b; }
         .error { background: #fee2e2; color: #991b1b; border-radius: 16px; }
@@ -38,44 +51,516 @@
         .issued-info { background: #fef3c7; padding: 12px; border-radius: 12px; margin-top: 10px; }
         .qr-container canvas { margin: 10px auto; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px; background: white; }
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1100; }
+        .search-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; margin-bottom: 16px; }
+        .filter-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+        .filter-selects { display: flex; gap: 12px; align-items: center; }
+        .filter-select { padding: 8px 12px; border-radius: 12px; border: 1px solid #cbd5e1; background: white; font-size: 14px; cursor: pointer; }
+        .login-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 2000; }
+        .login-box { background: white; border-radius: 24px; padding: 32px; max-width: 400px; width: 90%; text-align: center; }
+        .login-box input, .login-box select, .login-box button { width: 100%; padding: 12px; margin-top: 15px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; }
+        .login-box button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
     </style>
 </head>
 <body>
-<div class="container" id="app">Р—Р°РіСЂСѓР·РєР°...</div>
+<div class="container" id="app">Загрузка...</div>
+<div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+        <h2>Вход в систему</h2>
+        <input type="text" id="loginUsername" placeholder="Имя пользователя">
+        <input type="password" id="loginPassword" placeholder="Пароль">
+        <button id="loginBtn">Войти</button>
+    </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
-    // ========== РќРђРЎРўР РћР™РљР (Р—РђРњР•РќРРўР• РќРђ Р’РђРЁР) ==========
-    const PUBLIC_KEY = "ciFZRWIX5aqjNg";                     // Р’Р°С€ РїСѓР±Р»РёС‡РЅС‹Р№ РєР»СЋС‡
-    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url="; // Р’Р°С€ Worker
-    const WRITE_SECRET = "mySecretKey123";                   // РЎРµРєСЂРµС‚РЅС‹Р№ РєР»СЋС‡ (РґРѕР»Р¶РµРЅ СЃРѕРІРїР°РґР°С‚СЊ СЃ Worker)
-    const OAUTH_TOKEN = "y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1";                    // Р’Р°С€ OAuth-С‚РѕРєРµРЅ СЃ РїСЂР°РІР°РјРё РЅР° Р·Р°РїРёСЃСЊ
-    // =================================================
+    // ========== НАСТРОЙКИ ==========
+    const PUBLIC_KEY = "kAXYp4XPyNJAWg";
+    const PROXY_URL = "https://autumn-queen-abbe.kirik7061.workers.dev/?url=";
+    const WRITE_SECRET = "mySecretKey123";
+    const OAUTH_TOKEN = "y0__wgBEK3T6dMDGMuvQiCp95HVFzD38tqJCD_9zO1sUwHlVUnaAOeiJ_uRkBA1";
+    // ================================
 
     let currentInstruments = [];
+    let currentHistory = [];
+    let searchQuery = "";
+    let verificationFilter = "all";
+    let conditionFilter = "all";
+    let currentUser = null; // { username, role }
 
+    // ---------- Управление пользователями (синхронизация с Excel и localStorage) ----------
+    let usersCache = []; // кэш пользователей
+
+    async function loadUsersFromExcel() {
+        // Читаем лист "Пользователи" из того же файла, где и приборы
+        const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
+        const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
+        const response = await fetch(proxiedApiUrl);
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (!data.href) return null;
+        const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
+        const fileResponse = await fetch(proxiedFileUrl);
+        const blob = await fileResponse.blob();
+        const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+        const sheet = workbook.Sheets["Пользователи"];
+        if (!sheet) return [];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (!rows || rows.length < 2) return [];
+        const users = [];
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length < 2) continue;
+            const username = row[0]?.toString().trim();
+            const password = row[1]?.toString().trim();
+            const role = row[2]?.toString().trim() === 'admin' ? 'admin' : 'employee';
+            if (username && password) users.push({ username, password, role });
+        }
+        return users;
+    }
+
+    async function saveUsersToExcel(users) {
+        // Сохраняем лист "Пользователи" в тот же Excel-файл
+        try {
+            // 1. Получить текущий файл
+            const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
+            const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
+            const response = await fetch(proxiedApiUrl);
+            if (!response.ok) throw new Error("Не удалось загрузить файл");
+            const data = await response.json();
+            if (!data.href) throw new Error("Нет ссылки");
+            const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
+            const fileResponse = await fetch(proxiedFileUrl);
+            const blob = await fileResponse.blob();
+            const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+            
+            // 2. Создать/обновить лист "Пользователи"
+            const sheetData = [["Имя пользователя", "Пароль", "Роль"]];
+            for (const u of users) {
+                sheetData.push([u.username, u.password, u.role === 'admin' ? 'admin' : 'employee']);
+            }
+            const ws = XLSX.utils.aoa_to_sheet(sheetData);
+            workbook.Sheets["Пользователи"] = ws;
+            if (!workbook.SheetNames.includes("Пользователи")) workbook.SheetNames.push("Пользователи");
+            
+            // 3. Сохранить обратно на Диск
+            const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            const blobOut = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            
+            const proxyBase = PROXY_URL.split('?')[0];
+            const uploadResp = await fetch(`${proxyBase}?get_upload_url=1`, {
+                headers: { 'X-Write-Secret': WRITE_SECRET }
+            });
+            if (!uploadResp.ok) throw new Error("Не удалось получить ссылку для загрузки");
+            const { href } = await uploadResp.json();
+            const putResp = await fetch(href, { method: 'PUT', body: blobOut, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } });
+            if (!putResp.ok) throw new Error("Ошибка загрузки");
+        } catch (err) {
+            console.error("Ошибка сохранения пользователей в Excel:", err);
+        }
+    }
+
+    async function initUsers() {
+        try {
+            const excelUsers = await loadUsersFromExcel();
+            if (excelUsers && excelUsers.length > 0) {
+                usersCache = excelUsers;
+                localStorage.setItem('app_users', JSON.stringify(usersCache));
+            } else {
+                let localUsers = localStorage.getItem('app_users');
+                if (!localUsers) {
+                    const defaultUsers = [{ username: 'admin', password: 'admin', role: 'admin' }];
+                    localStorage.setItem('app_users', JSON.stringify(defaultUsers));
+                    usersCache = defaultUsers;
+                    await saveUsersToExcel(defaultUsers);
+                } else {
+                    usersCache = JSON.parse(localocalUsers);
+                    await saveUsersToExcel(usersCache);
+                }
+            }
+        } catch (e) {
+            console.error("Ошибка инициализации пользователей", e);
+            // fallback на localStorage
+            let localUsers = localStorage.getItem('app_users');
+            if (!localUsers) {
+                localUsers = [{ username: 'admin', password: 'admin', role: 'admin' }];
+                localStorage.setItem('app_users', JSON.stringify(localUsers));
+            }
+            usersCache = JSON.parse(localUsers);
+        }
+    }
+
+    function getUsers() { return usersCache; }
+    function saveUsersLocally(users) {
+        usersCache = users;
+        localStorage.setItem('app_users', JSON.stringify(users));
+        saveUsersToExcel(users); // фоном синхронизируем с Excel
+    }
+
+    function addUser(username, password, role) {
+        const users = getUsers();
+        if (users.find(u => u.username === username)) return false;
+        users.push({ username, password, role });
+        saveUsersLocally(users);
+        return true;
+    }
+
+    function updateUser(oldUsername, newUsername, newPassword, newRole) {
+        const users = getUsers();
+        const index = users.findIndex(u => u.username === oldUsername);
+        if (index === -1) return false;
+        if (newUsername !== oldUsername && users.find(u => u.username === newUsername)) return false;
+        users[index] = { username: newUsername, password: newPassword, role: newRole };
+        saveUsersLocally(users);
+        return true;
+    }
+
+    function deleteUser(username) {
+        if (username === 'admin') return false; // нельзя удалить админа
+        const users = getUsers();
+        const newUsers = users.filter(u => u.username !== username);
+        saveUsersLocally(newUsers);
+        return true;
+    }
+
+    function validateUser(username, password) {
+        const users = getUsers();
+        const user = users.find(u => u.username === username && u.password === password);
+        return user ? { username: user.username, role: user.role } : null;
+    }
+
+    // ---------- Управление сессией ----------
+    function hasAccess(allowedRoles) {
+        if (!currentUser) return false;
+        return allowedRoles.includes(currentUser.role);
+    }
+
+    function logout() {
+        currentUser = null;
+        sessionStorage.removeItem('instrumentUser');
+        document.getElementById('loginOverlay').style.display = 'flex';
+        document.getElementById('app').innerHTML = '';
+    }
+
+    function login(username, password) {
+        const user = validateUser(username, password);
+        if (user) {
+            currentUser = user;
+            sessionStorage.setItem('instrumentUser', JSON.stringify(currentUser));
+            document.getElementById('loginOverlay').style.display = 'none';
+            renderApp();
+            showMessage(`Добро пожаловать, ${username}!`);
+        } else {
+            showMessage('Неверное имя пользователя или пароль', true);
+        }
+    }
+
+    function checkSession() {
+        const savedUser = sessionStorage.getItem('instrumentUser');
+        if (savedUser) {
+            currentUser = JSON.parse(savedUser);
+            document.getElementById('loginOverlay').style.display = 'none';
+        } else {
+            document.getElementById('loginOverlay').style.display = 'flex';
+        }
+    }
+
+    // ---------- Формы управления сотрудниками (только для админа) ----------
+    function showAddUserForm() {
+        const formHtml = `
+            <div class="form-group"><label>Имя сотрудника</label><input type="text" id="newUsername" placeholder="ivanov"></div>
+            <div class="form-group"><label>Пароль</label><input type="password" id="newPassword" placeholder="придумайте пароль"></div>
+            <div class="form-group"><label>Права доступа</label>
+                <select id="newRole">
+                    <option value="admin">Администратор</option>
+                    <option value="employee">Сотрудник</option>
+                </select>
+            </div>
+            <div class="button-group">
+                <button class="btn btn-add-user" id="confirmAddUserBtn">➕ Добавить сотрудника</button>
+                <button class="btn btn-clear" id="cancelAddUserBtn">Отмена</button>
+            </div>
+        `;
+        showModal('Добавление нового сотрудника', formHtml);
+        document.getElementById('confirmAddUserBtn').onclick = () => {
+            const username = document.getElementById('newUsername').value.trim();
+            const password = document.getElementById('newPassword').value.trim();
+            const role = document.getElementById('newRole').value;
+            if (!username || !password) {
+                showMessage('Заполните имя и пароль', true);
+                return;
+            }
+            if (addUser(username, password, role)) {
+                showMessage(`Сотрудник ${username} добавлен!`);
+                document.getElementById('customModal').style.display = 'none';
+            } else {
+                showMessage('Пользователь с таким именем уже существует', true);
+            }
+        };
+        document.getElementById('cancelAddUserBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+    }
+
+    function showManageUsersForm() {
+        const users = getUsers();
+        let rowsHtml = '';
+        users.forEach(u => {
+            rowsHtml += `
+                <div style="border-bottom:1px solid #e2e8f0; padding:10px 0; display:flex; justify-content:space-between; align-items:center;">
+                    <span><strong>${escapeHtml(u.username)}</strong> (${u.role === 'admin' ? 'Админ' : 'Сотрудник'})</span>
+                    <div>
+                        <button class="btn btn-small btn-edit" onclick="editUser('${u.username}')">✏️</button>
+                        ${u.username !== 'admin' ? `<button class="btn btn-small btn-delete" onclick="deleteUserAccount('${u.username}')">🗑️</button>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        const formHtml = `
+            <div id="usersList">${rowsHtml}</div>
+            <div class="button-group"><button class="btn btn-clear" id="closeUsersBtn">Закрыть</button></div>
+        `;
+        showModal('Управление сотрудниками', formHtml);
+        document.getElementById('closeUsersBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+    }
+
+    window.editUser = (oldUsername) => {
+        const users = getUsers();
+        const user = users.find(u => u.username === oldUsername);
+        if (!user) return;
+        const formHtml = `
+            <div class="form-group"><label>Имя пользователя</label><input type="text" id="editUsername" value="${escapeHtml(user.username)}"></div>
+            <div class="form-group"><label>Новый пароль</label><input type="password" id="editPassword" placeholder="Оставьте пустым, чтобы не менять"></div>
+            <div class="form-group"><label>Права доступа</label>
+                <select id="editRole">
+                    <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Администратор</option>
+                    <option value="employee" ${user.role === 'employee' ? 'selected' : ''}>Сотрудник</option>
+                </select>
+            </div>
+            <div class="button-group">
+                <button class="btn btn-edit" id="saveEditBtn">Сохранить</button>
+                <button class="btn btn-clear" id="cancelEditBtn">Отмена</button>
+            </div>
+        `;
+        showModal(`Редактирование пользователя ${oldUsername}`, formHtml);
+        document.getElementById('saveEditBtn').onclick = () => {
+            const newUsername = document.getElementById('editUsername').value.trim();
+            let newPassword = document.getElementById('editPassword').value.trim();
+            const newRole = document.getElementById('editRole').value;
+            if (!newUsername) {
+                showMessage('Имя не может быть пустым', true);
+                return;
+            }
+            if (newPassword === '') newPassword = user.password;
+            if (updateUser(oldUsername, newUsername, newPassword, newRole)) {
+                showMessage(`Пользователь ${oldUsername} обновлён`);
+                document.getElementById('customModal').style.display = 'none';
+                if (currentUser.username === oldUsername) {
+                    // если текущий пользователь изменил свои данные, обновляем сессию
+                    currentUser.username = newUsername;
+                    currentUser.role = newRole;
+                    sessionStorage.setItem('instrumentUser', JSON.stringify(currentUser));
+                }
+                renderApp(); // обновляем интерфейс (кнопка "Добавить сотрудника" может измениться)
+            } else {
+                showMessage('Не удалось обновить (возможно, имя уже занято)', true);
+            }
+        };
+        document.getElementById('cancelEditBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+    };
+
+    window.deleteUserAccount = (username) => {
+        if (confirm(`Удалить пользователя ${username}?`)) {
+            if (deleteUser(username)) {
+                showMessage(`Пользователь ${username} удалён`);
+                if (currentUser.username === username) {
+                    logout();
+                } else {
+                    document.getElementById('customModal').style.display = 'none';
+                    renderApp();
+                }
+            } else {
+                showMessage('Нельзя удалить администратора', true);
+            }
+        }
+    };
+
+    // ---------- Редактирование профиля текущего пользователя ----------
+    function showEditProfileForm() {
+        const formHtml = `
+            <div class="form-group"><label>Новое имя пользователя</label><input type="text" id="profileUsername" value="${escapeHtml(currentUser.username)}"></div>
+            <div class="form-group"><label>Новый пароль</label><input type="password" id="profilePassword" placeholder="Оставьте пустым, чтобы не менять"></div>
+            <div class="button-group">
+                <button class="btn btn-edit" id="saveProfileBtn">Сохранить изменения</button>
+                <button class="btn btn-clear" id="cancelProfileBtn">Отмена</button>
+            </div>
+        `;
+        showModal('Редактирование профиля', formHtml);
+        document.getElementById('saveProfileBtn').onclick = () => {
+            const newUsername = document.getElementById('profileUsername').value.trim();
+            let newPassword = document.getElementById('profilePassword').value.trim();
+            if (!newUsername) {
+                showMessage('Имя не может быть пустым', true);
+                return;
+            }
+            const users = getUsers();
+            const user = users.find(u => u.username === currentUser.username);
+            if (!user) return;
+            if (newPassword === '') newPassword = user.password;
+            if (updateUser(currentUser.username, newUsername, newPassword, user.role)) {
+                showMessage('Профиль обновлён, выполните вход заново');
+                logout();
+            } else {
+                showMessage('Не удалось обновить (имя уже занято)', true);
+            }
+        };
+        document.getElementById('cancelProfileBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+    }
+
+    // ---------- Вспомогательные функции (уведомления, статусы, работа с Яндекс.Диском) ----------
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
         toast.className = 'toast';
         toast.textContent = msg;
-        toast.style.background = isError ? '#e74c3c' : '#2ecc71';
+        toast.style.background = isError ? '#ef4444' : '#10b981';
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
+    }
+
+    function getVerificationText(validUntil) {
+        if (!validUntil || validUntil === '-' || validUntil === '') return 'без поверки';
+        const today = new Date().toISOString().slice(0,10);
+        return validUntil < today ? 'не поверен' : 'поверен';
+    }
+    function getVerificationClass(validUntil) {
+        const text = getVerificationText(validUntil);
+        if (text === 'поверен') return 'good';
+        if (text === 'не поверен') return 'expired';
+        return 'no-date';
+    }
+    function getConditionText(condition) {
+        if (condition === 'busy') return 'занят';
+        if (condition === 'broken') return 'не исправен';
+        return 'свободен';
+    }
+    function getConditionClass(condition) {
+        if (condition === 'busy') return 'status-busy';
+        if (condition === 'broken') return 'status-broken';
+        return 'status-free';
+    }
+
+    async function saveToYandex() {
+        try {
+            const proxyBase = PROXY_URL.split('?')[0];
+            const response = await fetch(`${proxyBase}?get_upload_url=1`, {
+                headers: { 'X-Write-Secret': WRITE_SECRET }
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || `HTTP ${response.status}`);
+            }
+            const { href } = await response.json();
+            if (!href) throw new Error("Нет ссылки для загрузки");
+
+            const headersRow = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
+                                "Дата поверки", "Действительно до", "Ссылка на документ",
+                                "Кто взял", "Куда взял", "Дата выдачи", "Состояние"];
+            const wsData = [
+                headersRow,
+                ...currentInstruments.map(inst => [
+                    inst.id, inst.name, inst.serial_number, inst.model, inst.type,
+                    inst.verification_date, inst.valid_until, inst.document_url,
+                    inst.taken_by, inst.taken_where, inst.taken_date,
+                    inst.condition || 'free'
+                ])
+            ];
+            const wsInstruments = XLSX.utils.aoa_to_sheet(wsData);
+
+            const historyHeaders = ["ID прибора", "Название", "Кто взял", "Куда взял", "Дата выдачи", "Дата возврата"];
+            const historyData = [
+                historyHeaders,
+                ...currentHistory.map(rec => [
+                    rec.id, rec.name, rec.takenBy, rec.takenWhere, rec.issuedDate, rec.returnDate || ""
+                ])
+            ];
+            const wsHistory = XLSX.utils.aoa_to_sheet(historyData);
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, wsInstruments, "Приборы");
+            XLSX.utils.book_append_sheet(wb, wsHistory, "История");
+            // Добавляем лист пользователей
+            const users = getUsers();
+            const usersSheetData = [["Имя пользователя", "Пароль", "Роль"]];
+            for (const u of users) {
+                usersSheetData.push([u.username, u.password, u.role === 'admin' ? 'admin' : 'employee']);
+            }
+            const wsUsers = XLSX.utils.aoa_to_sheet(usersSheetData);
+            XLSX.utils.book_append_sheet(wb, wsUsers, "Пользователи");
+
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+            const putResponse = await fetch(href, {
+                method: 'PUT',
+                body: blob,
+                headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+            });
+            if (!putResponse.ok) throw new Error(`Ошибка загрузки: ${putResponse.status}`);
+            console.log("Данные сохранены на Диск");
+        } catch (err) {
+            console.error("Ошибка сохранения:", err);
+            showMessage("Ошибка сохранения на Диск", true);
+        }
+    }
+
+    function addHistoryEntry(instrument, takenBy, takenWhere, issuedDate) {
+        currentHistory.push({
+            id: instrument.id,
+            name: instrument.name,
+            takenBy: takenBy,
+            takenWhere: takenWhere,
+            issuedDate: issuedDate,
+            returnDate: null
+        });
+    }
+
+    function closeHistoryEntry(instrument, returnDate) {
+        for (let i = currentHistory.length - 1; i >= 0; i--) {
+            if (currentHistory[i].id === instrument.id && !currentHistory[i].returnDate) {
+                currentHistory[i].returnDate = returnDate;
+                return true;
+            }
+        }
+        currentHistory.push({
+            id: instrument.id,
+            name: instrument.name,
+            takenBy: "?",
+            takenWhere: "?",
+            issuedDate: "?",
+            returnDate: returnDate
+        });
+        return false;
     }
 
     async function getTableData() {
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
         const response = await fetch(proxiedApiUrl);
-        if (!response.ok) throw new Error(`РћС€РёР±РєР° API: ${response.status}`);
+        if (!response.ok) throw new Error(`Ошибка API: ${response.status}`);
         const data = await response.json();
-        if (!data.href) throw new Error("РќРµС‚ СЃСЃС‹Р»РєРё РЅР° СЃРєР°С‡РёРІР°РЅРёРµ");
+        if (!data.href) throw new Error("Нет ссылки на скачивание");
         const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
         const fileResponse = await fetch(proxiedFileUrl);
-        if (!fileResponse.ok) throw new Error(`РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё С„Р°Р№Р»Р°: ${fileResponse.status}`);
+        if (!fileResponse.ok) throw new Error(`Ошибка загрузки файла: ${fileResponse.status}`);
         const blob = await fileResponse.blob();
-        if (blob.size < 100) throw new Error("РЎРєР°С‡Р°РЅ РїСѓСЃС‚РѕР№ С„Р°Р№Р»");
+        if (blob.size < 100) throw new Error("Скачан пустой файл");
         return await readExcelFromBlob(blob);
     }
 
@@ -86,29 +571,52 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
-                    if (!rows || rows.length < 2) { resolve([]); return; }
-                    const instruments = [];
-                    for (let i = 1; i < rows.length; i++) {
-                        const row = rows[i];
-                        if (!row || row.length === 0) continue;
-                        if (row[0] === undefined || row[0] === "") continue;
-                        instruments.push({
-                            id: String(row[0]),
-                            name: row[1] || '',
-                            serial_number: row[2] || '',
-                            model: row[3] || '',
-                            type: row[4] || '',
-                            verification_date: formatDateFromExcel(row[5]),
-                            valid_until: formatDateFromExcel(row[6]),
-                            document_url: row[7] || '',
-                            taken_by: row[10] || '',
-                            taken_where: row[11] || '',
-                            taken_date: formatDateFromExcel(row[12])
-                        });
+                    let instruments = [];
+                    const sheetInstr = workbook.Sheets["Приборы"];
+                    if (sheetInstr) {
+                        const rows = XLSX.utils.sheet_to_json(sheetInstr, { header: 1, defval: "" });
+                        if (rows && rows.length > 1) {
+                            for (let i = 1; i < rows.length; i++) {
+                                const row = rows[i];
+                                if (!row || row.length === 0) continue;
+                                if (row[0] === undefined || row[0] === "") continue;
+                                instruments.push({
+                                    id: String(row[0]),
+                                    name: row[1] || '',
+                                    serial_number: row[2] || '',
+                                    model: row[3] || '',
+                                    type: row[4] || '',
+                                    verification_date: formatDateFromExcel(row[5]),
+                                    valid_until: formatDateFromExcel(row[6]),
+                                    document_url: row[7] || '',
+                                    taken_by: row[8] || '',
+                                    taken_where: row[9] || '',
+                                    taken_date: formatDateFromExcel(row[10]),
+                                    condition: row[11] || 'free'
+                                });
+                            }
+                        }
                     }
-                    resolve(instruments);
+                    let history = [];
+                    const sheetHist = workbook.Sheets["История"];
+                    if (sheetHist) {
+                        const rows = XLSX.utils.sheet_to_json(sheetHist, { header: 1, defval: "" });
+                        if (rows && rows.length > 1) {
+                            for (let i = 1; i < rows.length; i++) {
+                                const row = rows[i];
+                                if (!row || row.length < 6) continue;
+                                history.push({
+                                    id: String(row[0] || ''),
+                                    name: row[1] || '',
+                                    takenBy: row[2] || '',
+                                    takenWhere: row[3] || '',
+                                    issuedDate: row[4] || '',
+                                    returnDate: row[5] || null
+                                });
+                            }
+                        }
+                    }
+                    resolve({ instruments, history });
                 } catch(e) { reject(e); }
             };
             reader.onerror = reject;
@@ -128,19 +636,13 @@
         return str.slice(0,10);
     }
 
-    function getStatus(validUntil) {
-        if (!validUntil || validUntil === '-') return 'Р±РµР· СЃСЂРѕРєР°';
-        const today = new Date().toISOString().slice(0,10);
-        return validUntil < today ? 'РїСЂРѕСЃСЂРѕС‡РµРЅ' : 'РіРѕРґРµРЅ';
-    }
-
     function showModal(title, content) {
         let modal = document.getElementById('customModal');
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'customModal';
             modal.className = 'modal';
-            modal.innerHTML = `<div class="modal-content"><h3 id="modalTitle"></h3><div id="modalBody"></div><button class="btn btn-small" id="modalCloseBtn">Р—Р°РєСЂС‹С‚СЊ</button></div>`;
+            modal.innerHTML = `<div class="modal-content"><h3 id="modalTitle"></h3><div id="modalBody"></div><button class="btn btn-small" id="modalCloseBtn">Закрыть</button></div>`;
             document.body.appendChild(modal);
             document.getElementById('modalCloseBtn').onclick = () => modal.style.display = 'none';
         }
@@ -152,8 +654,8 @@
     function showQRModal(instrument) {
         const currentUrl = window.location.href.split('?')[0];
         const cardUrl = `${currentUrl}?id=${encodeURIComponent(instrument.id)}`;
-        const content = `<div class="qr-container"><p><strong>${escapeHtml(instrument.name)}</strong></p><div id="qr-code"></div><button class="btn btn-small" id="downloadQR">РЎРєР°С‡Р°С‚СЊ QR</button></div>`;
-        showModal(`QR-РєРѕРґ #${instrument.id}`, content);
+        const content = `<div class="qr-container"><p><strong>${escapeHtml(instrument.name)}</strong></p><div id="qr-code"></div><button class="btn btn-small" id="downloadQR">Скачать QR</button></div>`;
+        showModal(`QR-код #${instrument.id}`, content);
         setTimeout(() => {
             new QRCode(document.getElementById("qr-code"), { text: cardUrl, width: 200, height: 200 });
             document.getElementById('downloadQR').onclick = () => {
@@ -168,76 +670,139 @@
         }, 100);
     }
 
-    async function saveInstrumentsToYandex() {
-    if (!OAUTH_TOKEN || OAUTH_TOKEN === 'y0__Р’РђРЁ_РўРћРљР•Рќ') {
-        showMessage("вќЊ РЈРєР°Р¶РёС‚Рµ OAuth-С‚РѕРєРµРЅ РІ РєРѕРґРµ СЃР°Р№С‚Р°", true);
-        console.error("РўРѕРєРµРЅ РЅРµ Р·Р°РґР°РЅ");
-        return;
-    }
-    try {
-        showMessage("РџРѕРґРіРѕС‚РѕРІРєР° Рє СЃРѕС…СЂР°РЅРµРЅРёСЋ...");
-        const proxyBase = PROXY_URL.split('?')[0];
-        console.log("Р—Р°РїСЂР°С€РёРІР°РµРј СЃСЃС‹Р»РєСѓ РґР»СЏ Р·Р°РіСЂСѓР·РєРё Сѓ Worker...");
-        const response = await fetch(`${proxyBase}?get_upload_url=1`, {
-            headers: { 'X-Write-Secret': WRITE_SECRET }
-        });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || `HTTP ${response.status}`);
+    async function confirmDelete(instrument) {
+        const confirmed = confirm(`Удалить прибор "${instrument.name}" (ID ${instrument.id})? Это действие нельзя отменить.`);
+        if (confirmed) {
+            const index = currentInstruments.findIndex(i => i.id === instrument.id);
+            if (index !== -1) {
+                currentInstruments.splice(index, 1);
+                await saveToYandex();
+                renderApp();
+                showMessage(`✅ Прибор "${instrument.name}" удалён!`);
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('id') === instrument.id) {
+                    window.location.href = window.location.href.split('?')[0];
+                }
+            }
         }
-        const { href } = await response.json();
-        if (!href) throw new Error("РќРµС‚ СЃСЃС‹Р»РєРё РґР»СЏ Р·Р°РіСЂСѓР·РєРё");
-        console.log("РЎСЃС‹Р»РєР° РґР»СЏ Р·Р°РіСЂСѓР·РєРё РїРѕР»СѓС‡РµРЅР°:", href);
-
-        // РЎРѕР·РґР°РЅРёРµ Excel
-        const wsData = currentInstruments.map(inst => [
-            inst.id, inst.name, inst.serial_number, inst.model, inst.type,
-            inst.verification_date, inst.valid_until, inst.document_url,
-            inst.taken_by, inst.taken_where, inst.taken_date
-        ]);
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "РџСЂРёР±РѕСЂС‹");
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-        console.log("РћС‚РїСЂР°РІР»СЏРµРј PUT-Р·Р°РїСЂРѕСЃ РЅР° Р”РёСЃРє...");
-        const putResponse = await fetch(href, {
-            method: 'PUT',
-            body: blob,
-            headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
-        });
-        if (!putResponse.ok) {
-            const errorText = await putResponse.text();
-            throw new Error(`РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё: ${putResponse.status} ${errorText}`);
-        }
-        console.log("PUT СѓСЃРїРµС€РµРЅ, СЃС‚Р°С‚СѓСЃ:", putResponse.status);
-        showMessage("вњ… Р”Р°РЅРЅС‹Рµ СЃРѕС…СЂР°РЅРµРЅС‹ РЅР° РЇРЅРґРµРєСЃ.Р”РёСЃРє!");
-        // РќР• РїРµСЂРµР·Р°РіСЂСѓР¶Р°РµРј РґР°РЅРЅС‹Рµ СЃ РґРёСЃРєР°, С‡С‚РѕР±С‹ РЅРµ С‚РµСЂСЏС‚СЊ РёР·РјРµРЅРµРЅРёСЏ РІ РїР°РјСЏС‚Рё
-    } catch (err) {
-        console.error("РћС€РёР±РєР° РїСЂРё СЃРѕС…СЂР°РЅРµРЅРёРё:", err);
-        showMessage("вќЊ РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ: " + err.message, true);
     }
-}
+
+    function setCondition(instrument, condition) {
+        if (instrument.condition === condition) return;
+        instrument.condition = condition;
+        if (condition === 'broken') {
+            instrument.taken_by = '';
+            instrument.taken_where = '';
+            instrument.taken_date = '';
+        } else if (condition === 'free') {
+            if (instrument.taken_by) {
+                instrument.taken_by = '';
+                instrument.taken_where = '';
+                instrument.taken_date = '';
+            }
+        }
+        renderApp();
+        saveToYandex().then(() => showMessage(`Статус изменён на "${getConditionText(condition)}"`));
+    }
+
+    function showAddForm() {
+        let maxId = 0;
+        for (const inst of currentInstruments) {
+            const num = parseInt(inst.id, 10);
+            if (!isNaN(num) && num > maxId) maxId = num;
+        }
+        const nextId = maxId + 1;
+        const today = new Date().toISOString().slice(0,10);
+        const formHtml = `
+            <div class="form-group"><label>Название прибора</label><input type="text" id="new_name" placeholder="Например: Мультиметр"></div>
+            <div class="form-group"><label>Серийный номер</label><input type="text" id="new_serial" placeholder="Введите серийный номер"></div>
+            <div class="form-group"><label>Модель</label><input type="text" id="new_model" placeholder="Модель"></div>
+            <div class="form-group"><label>Тип</label>
+                <select id="new_type">
+                    <option value="Поверка">Поверка</option>
+                    <option value="Калибровка">Калибровка</option>
+                </select>
+            </div>
+            <div class="form-group" id="new_date_group"><label>Дата поверки</label><input type="date" id="new_verif" value="${today}"></div>
+            <div class="form-group"><label>Действительно до</label><input type="date" id="new_valid" value="${today}"></div>
+            <div class="form-group"><label>Ссылка на документ</label><input type="text" id="new_doc" placeholder="https://..."></div>
+            <div class="button-group">
+                <button class="btn btn-add" id="confirmAddBtn">➕ Добавить прибор</button>
+                <button class="btn btn-clear" id="cancelAddBtn">Отмена</button>
+            </div>
+        `;
+        showModal(`Добавление нового прибора (ID будет ${nextId})`, formHtml);
+        document.getElementById('confirmAddBtn').onclick = async () => {
+            const newInstrument = {
+                id: String(nextId),
+                name: document.getElementById('new_name').value || "Новый прибор",
+                serial_number: document.getElementById('new_serial').value || "",
+                model: document.getElementById('new_model').value || "",
+                type: document.getElementById('new_type').value,
+                verification_date: document.getElementById('new_verif').value || "",
+                valid_until: document.getElementById('new_valid').value || "",
+                document_url: document.getElementById('new_doc').value || "",
+                taken_by: "",
+                taken_where: "",
+                taken_date: "",
+                condition: "free"
+            };
+            currentInstruments.push(newInstrument);
+            document.getElementById('customModal').style.display = 'none';
+            renderApp();
+            await saveToYandex();
+            showMessage(`✅ Прибор "${newInstrument.name}" добавлен и сохранён!`);
+        };
+        document.getElementById('cancelAddBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+        const typeSelect = document.getElementById('new_type');
+        const dateGroup = document.getElementById('new_date_group');
+        if (typeSelect && dateGroup) {
+            const updateLabel = () => {
+                const label = dateGroup.querySelector('label');
+                if (typeSelect.value === 'Поверка') label.innerText = 'Дата поверки';
+                else label.innerText = 'Дата калибровки';
+            };
+            typeSelect.addEventListener('change', updateLabel);
+            updateLabel();
+        }
+    }
 
     function showEditAllForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
-            <div class="form-group"><label>РќР°Р·РІР°РЅРёРµ РїСЂРёР±РѕСЂР°</label><input type="text" id="edit_name" value="${escapeHtml(instrument.name)}"></div>
-            <div class="form-group"><label>РЎРµСЂРёР№РЅС‹Р№ РЅРѕРјРµСЂ</label><input type="text" id="edit_serial" value="${escapeHtml(instrument.serial_number)}"></div>
-            <div class="form-group"><label>РњРѕРґРµР»СЊ</label><input type="text" id="edit_model" value="${escapeHtml(instrument.model)}"></div>
-            <div class="form-group"><label>РўРёРї РґРѕРєСѓРјРµРЅС‚Р°</label><input type="text" id="edit_type" value="${escapeHtml(instrument.type)}"></div>
-            <div class="form-group"><label>Р”Р°С‚Р° РїРѕРІРµСЂРєРё</label><input type="date" id="edit_verif" value="${instrument.verification_date || ''}"></div>
-            <div class="form-group"><label>Р”РµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ РґРѕ</label><input type="date" id="edit_valid" value="${instrument.valid_until || ''}"></div>
-            <div class="form-group"><label>РЎСЃС‹Р»РєР° РЅР° РґРѕРєСѓРјРµРЅС‚</label><input type="text" id="edit_doc" value="${escapeHtml(instrument.document_url)}"></div>
-            <div class="form-group"><label>РљС‚Рѕ РІР·СЏР»</label><input type="text" id="edit_taken_by" value="${escapeHtml(instrument.taken_by)}"></div>
-            <div class="form-group"><label>РљСѓРґР° РІР·СЏР»</label><input type="text" id="edit_taken_where" value="${escapeHtml(instrument.taken_where)}"></div>
-            <div class="form-group"><label>Р”Р°С‚Р° РІС‹РґР°С‡Рё</label><input type="date" id="edit_taken_date" value="${instrument.taken_date || ''}"></div>
-            <button class="btn btn-edit" id="saveAllBtn">РЎРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ</button>
-            <button class="btn btn-clear" id="cancelAllBtn">РћС‚РјРµРЅР°</button>
+            <div class="form-group"><label>Название прибора</label><input type="text" id="edit_name" value="${escapeHtml(instrument.name)}"></div>
+            <div class="form-group"><label>Серийный номер</label><input type="text" id="edit_serial" value="${escapeHtml(instrument.serial_number)}"></div>
+            <div class="form-group"><label>Модель</label><input type="text" id="edit_model" value="${escapeHtml(instrument.model)}"></div>
+            <div class="form-group"><label>Тип</label>
+                <select id="edit_type">
+                    <option value="Поверка" ${instrument.type === 'Поверка' ? 'selected' : ''}>Поверка</option>
+                    <option value="Калибровка" ${instrument.type === 'Калибровка' ? 'selected' : ''}>Калибровка</option>
+                </select>
+            </div>
+            <div class="form-group" id="edit_date_group"><label>Дата поверки</label><input type="date" id="edit_verif" value="${instrument.verification_date || ''}"></div>
+            <div class="form-group"><label>Действительно до</label><input type="date" id="edit_valid" value="${instrument.valid_until || ''}"></div>
+            <div class="form-group"><label>Ссылка на документ</label><input type="text" id="edit_doc" value="${escapeHtml(instrument.document_url)}"></div>
+            <div class="form-group"><label>Кто взял</label><input type="text" id="edit_taken_by" value="${escapeHtml(instrument.taken_by)}"></div>
+            <div class="form-group"><label>Куда взял</label><input type="text" id="edit_taken_where" value="${escapeHtml(instrument.taken_where)}"></div>
+            <div class="form-group"><label>Дата выдачи</label><input type="date" id="edit_taken_date" value="${instrument.taken_date || ''}"></div>
+            <button class="btn btn-edit" id="saveAllBtn">Сохранить изменения</button>
+            <button class="btn btn-clear" id="cancelAllBtn">Отмена</button>
         `;
-        showModal(`Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ #${instrument.id}`, formHtml);
-        document.getElementById('saveAllBtn').onclick = () => {
+        showModal(`Редактирование #${instrument.id}`, formHtml);
+        const typeSelect = document.getElementById('edit_type');
+        const dateGroup = document.getElementById('edit_date_group');
+        const updateLabel = () => {
+            const label = dateGroup.querySelector('label');
+            if (typeSelect.value === 'Поверка') label.innerText = 'Дата поверки';
+            else label.innerText = 'Дата калибровки';
+        };
+        if (typeSelect && dateGroup) {
+            typeSelect.addEventListener('change', updateLabel);
+            updateLabel();
+        }
+        document.getElementById('saveAllBtn').onclick = async () => {
             instrument.name = document.getElementById('edit_name').value;
             instrument.serial_number = document.getElementById('edit_serial').value;
             instrument.model = document.getElementById('edit_model').value;
@@ -250,7 +815,8 @@
             instrument.taken_date = document.getElementById('edit_taken_date').value;
             document.getElementById('customModal').style.display = 'none';
             renderApp();
-            saveInstrumentsToYandex();
+            await saveToYandex();
+            showMessage("✅ Изменения сохранены!");
         };
         document.getElementById('cancelAllBtn').onclick = () => {
             document.getElementById('customModal').style.display = 'none';
@@ -260,28 +826,40 @@
     function showEditForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
-            <div class="form-group"><label>Р¤РРћ СЃРѕС‚СЂСѓРґРЅРёРєР°</label><input type="text" id="takenBy" value="${escapeHtml(instrument.taken_by)}"></div>
-            <div class="form-group"><label>РљСѓРґР° РІР·СЏР»</label><input type="text" id="takenWhere" value="${escapeHtml(instrument.taken_where)}"></div>
-            <div class="form-group"><label>Р”Р°С‚Р° РІС‹РґР°С‡Рё</label><input type="date" id="takenDate" value="${instrument.taken_date || today}"></div>
-            <button class="btn btn-edit" id="saveBtn">РЎРѕС…СЂР°РЅРёС‚СЊ</button>
-            <button class="btn btn-clear" id="clearBtn">РћС‡РёСЃС‚РёС‚СЊ</button>
+            <div class="form-group"><label>Место использования</label><input type="text" id="takenWhere" value="${escapeHtml(instrument.taken_where)}" placeholder="Например: Лаборатория 3"></div>
+            <button class="btn btn-edit" id="saveBtn">✅ Взять прибор</button>
+            <button class="btn btn-clear" id="clearBtn">❌ Очистить</button>
         `;
-        showModal(`Р’Р·СЏС‚СЊ РїСЂРёР±РѕСЂ: ${escapeHtml(instrument.name)}`, formHtml);
-        document.getElementById('saveBtn').onclick = () => {
-            instrument.taken_by = document.getElementById('takenBy').value;
-            instrument.taken_where = document.getElementById('takenWhere').value;
-            instrument.taken_date = document.getElementById('takenDate').value;
+        showModal(`Взять прибор: ${escapeHtml(instrument.name)}`, formHtml);
+        document.getElementById('saveBtn').onclick = async () => {
+            const newTakenWhere = document.getElementById('takenWhere').value;
+            const newTakenBy = currentUser.username;
+            const newTakenDate = new Date().toISOString().slice(0,10);
+            if (!newTakenWhere) {
+                showMessage('Укажите место использования', true);
+                return;
+            }
+            addHistoryEntry(instrument, newTakenBy, newTakenWhere, newTakenDate);
+            instrument.taken_by = newTakenBy;
+            instrument.taken_where = newTakenWhere;
+            instrument.taken_date = newTakenDate;
+            instrument.condition = 'busy';
             document.getElementById('customModal').style.display = 'none';
             renderApp();
-            saveInstrumentsToYandex();
+            await saveToYandex();
+            showMessage(`✅ Прибор взят ${newTakenBy}`);
         };
-        document.getElementById('clearBtn').onclick = () => {
+        document.getElementById('clearBtn').onclick = async () => {
+            const returnDate = new Date().toISOString().slice(0,10);
+            closeHistoryEntry(instrument, returnDate);
             instrument.taken_by = '';
             instrument.taken_where = '';
             instrument.taken_date = '';
+            if (instrument.condition !== 'broken') instrument.condition = 'free';
             document.getElementById('customModal').style.display = 'none';
             renderApp();
-            saveInstrumentsToYandex();
+            await saveToYandex();
+            showMessage("✅ Прибор возвращён");
         };
     }
 
@@ -295,84 +873,274 @@
         });
     }
 
+    window.copyInstrumentInfo = () => {
+        if (!window.currentInstrument) {
+            showMessage("❌ Нет данных для копирования", true);
+            return;
+        }
+        const inst = window.currentInstrument;
+        const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
+        const text = `Название: ${inst.name}\nСерийный номер: ${inst.serial_number || '—'}\nМодель: ${inst.model || '—'}\nТип: ${inst.type || '—'}\n${dateLabel}: ${inst.verification_date || '—'}\nДействительно до: ${inst.valid_until || '—'}\nСсылка на документ: ${inst.document_url || '—'}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => showMessage("✅ Информация скопирована!")).catch(() => showMessage("❌ Ошибка копирования", true));
+        } else {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showMessage("✅ Информация скопирована!");
+        }
+    };
+
+    // --- Карточка прибора (с учётом роли) ---
     function renderCard(inst) {
-        const status = getStatus(inst.valid_until);
-        const statusClass = status === 'РіРѕРґРµРЅ' ? 'good' : (status === 'РїСЂРѕСЃСЂРѕС‡РµРЅ' ? 'expired' : 'no-date');
+        const verifText = getVerificationText(inst.valid_until);
+        const verifClass = getVerificationClass(inst.valid_until);
+        const conditionText = getConditionText(inst.condition);
+        const conditionClass = getConditionClass(inst.condition);
         const hasTaken = inst.taken_by && inst.taken_by.trim() !== '';
         const takenHtml = hasTaken ? `
             <div class="issued-info">
-                <div class="field"><div class="field-label">РљС‚Рѕ РІР·СЏР»</div><div class="field-value">${escapeHtml(inst.taken_by)}</div></div>
-                <div class="field"><div class="field-label">РљСѓРґР° РІР·СЏР»</div><div class="field-value">${escapeHtml(inst.taken_where) || 'вЂ”'}</div></div>
-                <div class="field"><div class="field-label">Р”Р°С‚Р° РІС‹РґР°С‡Рё</div><div class="field-value">${escapeHtml(inst.taken_date) || 'вЂ”'}</div></div>
+                <div class="field"><div class="field-label">Кто взял</div><div class="field-value">${escapeHtml(inst.taken_by)}</div></div>
+                <div class="field"><div class="field-label">Место использования</div><div class="field-value">${escapeHtml(inst.taken_where) || '—'}</div></div>
+                <div class="field"><div class="field-label">Дата выдачи</div><div class="field-value">${escapeHtml(inst.taken_date) || '—'}</div></div>
             </div>
         ` : '';
-        const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">рџ“„ РћС‚РєСЂС‹С‚СЊ РґРѕРєСѓРјРµРЅС‚</a>` : 'вЂ”';
+        const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">📄 Открыть документ</a>` : '—';
+        const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
+
+        let issueButton = '';
+        if (hasTaken) {
+            issueButton = `<button class="btn btn-clear" onclick="(() => { 
+                const returnDate = new Date().toISOString().slice(0,10);
+                closeHistoryEntry(currentInstrument, returnDate);
+                currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
+                if (currentInstrument.condition !== 'broken') currentInstrument.condition = 'free';
+                renderApp(); 
+                saveToYandex().then(() => showMessage('Прибор возвращён!'));
+            })()">📦 Положить прибор</button>`;
+        } else {
+            issueButton = `<button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>`;
+        }
+
+        let adminExtraHtml = '';
+        if (hasAccess(['admin'])) {
+            adminExtraHtml = `
+                <div class="button-group" style="margin-top:0;">
+                    <button class="btn btn-status ${inst.condition === 'free' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'free')">Свободен</button>
+                    <button class="btn btn-status ${inst.condition === 'busy' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'busy')">Занят</button>
+                    <button class="btn btn-status ${inst.condition === 'broken' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'broken')">Не исправен</button>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
+                    <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">🗑️ Удалить прибор</button>
+                </div>
+            `;
+        }
+
         return `
         <div class="card">
             <div class="title">${escapeHtml(inst.name)}</div>
-            <div class="badge ${statusClass}">${escapeHtml(status)}</div>
-            <div class="field"><div class="field-label">РЎРµСЂРёР№РЅС‹Р№ РЅРѕРјРµСЂ</div><div class="field-value">${escapeHtml(inst.serial_number) || 'вЂ”'}</div></div>
-            <div class="field"><div class="field-label">РњРѕРґРµР»СЊ</div><div class="field-value">${escapeHtml(inst.model) || 'вЂ”'}</div></div>
-            <div class="field"><div class="field-label">РўРёРї</div><div class="field-value">${escapeHtml(inst.type) || 'вЂ”'}</div></div>
-            <div class="field"><div class="field-label">Р”Р°С‚Р° РїРѕРІРµСЂРєРё</div><div class="field-value">${escapeHtml(inst.verification_date) || 'вЂ”'}</div></div>
-            <div class="field"><div class="field-label">Р”РµР№СЃС‚РІРёС‚РµР»РµРЅ РґРѕ</div><div class="field-value">${escapeHtml(inst.valid_until) || 'вЂ”'}</div></div>
-            <div class="field"><div class="field-label">Р”РѕРєСѓРјРµРЅС‚</div><div class="field-value">${docLink}</div></div>
+            <div class="badge ${verifClass}">${escapeHtml(verifText)}</div>
+            <div class="field"><div class="field-label">Состояние</div>
+                <div><span class="status-badge ${conditionClass}">${conditionText}</span></div>
+            </div>
+            <div class="field"><div class="field-label">Серийный номер</div><div class="field-value">${escapeHtml(inst.serial_number) || '—'}</div></div>
+            <div class="field"><div class="field-label">Модель</div><div class="field-value">${escapeHtml(inst.model) || '—'}</div></div>
+            <div class="field"><div class="field-label">Тип</div><div class="field-value">${escapeHtml(inst.type) || '—'}</div></div>
+            <div class="field"><div class="field-label">${dateLabel}</div><div class="field-value">${escapeHtml(inst.verification_date) || '—'}</div></div>
+            <div class="field"><div class="field-label">Действительно до</div><div class="field-value">${escapeHtml(inst.valid_until) || '—'}</div></div>
+            <div class="field"><div class="field-label">Документ</div><div class="field-value">${docLink}</div></div>
             ${takenHtml}
+            ${adminExtraHtml}
             <div class="button-group">
-                <button class="btn btn-edit" onclick="showEditForm(currentInstrument)">рџ“ќ Р’Р·СЏС‚СЊ РїСЂРёР±РѕСЂ</button>
-                <button class="btn btn-clear" onclick="(() => { currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; renderApp(); saveInstrumentsToYandex(); })()">рџ“¦ РџРѕР»РѕР¶РёС‚СЊ РїСЂРёР±РѕСЂ</button>
-                <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">вњЏпёЏ Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ РїСЂРёР±РѕСЂ</button>
-                <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">рџ“± QR-РєРѕРґ</button>
-                <button class="btn btn-save" onclick="saveInstrumentsToYandex()">рџ’ѕ РЎРѕС…СЂР°РЅРёС‚СЊ РЅР° Р”РёСЃРє</button>
-                <a href="?" class="btn btn-clear">в†ђ Рљ СЃРїРёСЃРєСѓ</a>
+                ${issueButton}
+                <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
+                <button class="btn btn-edit" onclick="window.copyInstrumentInfo()">📋 Копировать информацию</button>
+                <a href="?" class="btn btn-clear">← К списку</a>
             </div>
         </div>`;
     }
 
-    function renderList() {
-        if (!currentInstruments.length) return '<div class="card"><h1>РћР±РѕСЂСѓРґРѕРІР°РЅРёРµ</h1><div class="error">РќРµС‚ РґР°РЅРЅС‹С…</div></div>';
-        let html = '<div class="card"><h1>РћР±РѕСЂСѓРґРѕРІР°РЅРёРµ</h1>';
-        html += `<div class="button-group"><button class="btn btn-save" onclick="saveInstrumentsToYandex()">рџ’ѕ РЎРѕС…СЂР°РЅРёС‚СЊ РІСЃРµ РёР·РјРµРЅРµРЅРёСЏ РЅР° Р”РёСЃРє</button></div>`;
-        for (const inst of currentInstruments) {
-            const status = getStatus(inst.valid_until);
-            const statusClass = status === 'РіРѕРґРµРЅ' ? 'good' : (status === 'РїСЂРѕСЃСЂРѕС‡РµРЅ' ? 'expired' : 'no-date');
-            const takenIcon = inst.taken_by ? 'рџ“¤' : 'вњ…';
+    // --- Список приборов ---
+    function renderListContainer() {
+        if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
+        
+        let filtered = currentInstruments;
+        if (searchQuery.trim() !== "") {
+            const query = searchQuery.trim().toLowerCase();
+            filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
+        }
+        if (verificationFilter !== "all") {
+            filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === verificationFilter);
+        }
+        if (conditionFilter !== "all") {
+            filtered = filtered.filter(inst => getConditionText(inst.condition) === conditionFilter);
+        }
+        
+        let html = '<div class="card"><h1>Оборудование</h1>';
+        html += `<div class="filter-row">`;
+        if (hasAccess(['admin'])) {
+            html += `<button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button>`;
+        } else {
+            html += `<div></div>`;
+        }
+        html += `<div class="filter-selects">
+                    <select id="verifFilterSelect" class="filter-select">
+                        <option value="all" ${verificationFilter === 'all' ? 'selected' : ''}>Поверка: все</option>
+                        <option value="поверен" ${verificationFilter === 'поверен' ? 'selected' : ''}>Поверен</option>
+                        <option value="не поверен" ${verificationFilter === 'не поверен' ? 'selected' : ''}>Не поверен</option>
+                        <option value="без поверки" ${verificationFilter === 'без поверки' ? 'selected' : ''}>Без поверки</option>
+                    </select>
+                    <select id="condFilterSelect" class="filter-select">
+                        <option value="all" ${conditionFilter === 'all' ? 'selected' : ''}>Состояние: все</option>
+                        <option value="свободен" ${conditionFilter === 'свободен' ? 'selected' : ''}>Свободен</option>
+                        <option value="занят" ${conditionFilter === 'занят' ? 'selected' : ''}>Занят</option>
+                        <option value="не исправен" ${conditionFilter === 'не исправен' ? 'selected' : ''}>Не исправен</option>
+                    </select>
+                </div>`;
+        html += `</div>`;
+        
+        for (const inst of filtered) {
+            const verifText = getVerificationText(inst.valid_until);
+            const verifClass = getVerificationClass(inst.valid_until);
+            const condText = getConditionText(inst.condition);
+            const condClass = getConditionClass(inst.condition);
             html += `<a href="?id=${encodeURIComponent(inst.id)}" class="list-item">
                 <span>#${escapeHtml(inst.id)} ${escapeHtml(inst.name)}</span>
-                <span><span class="badge ${statusClass}" style="margin:0;padding:4px 10px;">${escapeHtml(status)}</span> ${takenIcon}</span>
+                <div class="status-group">
+                    <span class="badge ${verifClass}" style="margin:0;padding:4px 10px;">${escapeHtml(verifText)}</span>
+                    <span class="status-badge ${condClass}">${escapeHtml(condText)}</span>
+                </div>
             </a>`;
         }
         html += '</div>';
         return html;
     }
 
+    // --- Главная страница ---
     function renderApp() {
+        if (!currentUser) return;
         const urlParams = new URLSearchParams(window.location.search);
         const id = urlParams.get('id');
         const appDiv = document.getElementById('app');
         if (!appDiv) return;
+        
         if (id) {
             const inst = currentInstruments.find(i => String(i.id) === id);
             if (inst) {
                 window.currentInstrument = inst;
                 appDiv.innerHTML = renderCard(inst);
             } else {
-                appDiv.innerHTML = `<div class="error">РџСЂРёР±РѕСЂ РЅРµ РЅР°Р№РґРµРЅ<br><a href="?" style="color:#2563eb;">в†ђ РќР°Р·Р°Рґ</a></div>`;
+                appDiv.innerHTML = `<div class="card error">Прибор не найден<br><a href="?" style="color:#2563eb;">← Назад</a></div>`;
             }
-        } else {
-            appDiv.innerHTML = renderList();
+            return;
+        }
+        
+        const roleText = currentUser.role === 'admin' ? 'Администратор' : currentUser.username;
+        const userHtml = `
+            <div class="user-info">
+                <div class="user-card">
+                    <span><strong>${roleText}</strong></span>
+                    ${hasAccess(['admin']) ? `<button class="btn btn-add-user" onclick="showManageUsersForm()">👥 Управление сотрудниками</button>` : ''}
+                    <button class="btn btn-edit" onclick="showEditProfileForm()">✏️ Редактировать профиль</button>
+                    <button class="btn btn-logout" onclick="logout()">Выйти</button>
+                </div>
+            </div>
+        `;
+        const searchCardHtml = `
+            <div class="card">
+                <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
+            </div>
+        `;
+        const listContainerHtml = `<div id="listContainer"></div>`;
+        
+        appDiv.innerHTML = userHtml + searchCardHtml + listContainerHtml;
+        
+        const container = document.getElementById('listContainer');
+        if (container) container.innerHTML = renderListContainer();
+        
+        const searchField = document.getElementById('globalSearchInput');
+        if (searchField) {
+            searchField.value = searchQuery;
+            searchField.addEventListener('input', (e) => {
+                searchQuery = e.target.value;
+                const listCont = document.getElementById('listContainer');
+                if (listCont) listCont.innerHTML = renderListContainer();
+                attachFilterEvents();
+            });
+        }
+        attachFilterEvents();
+    }
+    
+    function attachFilterEvents() {
+        const verifSelect = document.getElementById('verifFilterSelect');
+        const condSelect = document.getElementById('condFilterSelect');
+        if (verifSelect) {
+            verifSelect.removeEventListener('change', handleVerifSelectChange);
+            verifSelect.addEventListener('change', handleVerifSelectChange);
+        }
+        if (condSelect) {
+            condSelect.removeEventListener('change', handleCondSelectChange);
+            condSelect.addEventListener('change', handleCondSelectChange);
         }
     }
+    
+    function handleVerifSelectChange(e) {
+        verificationFilter = e.target.value;
+        const container = document.getElementById('listContainer');
+        if (container) container.innerHTML = renderListContainer();
+        attachFilterEvents();
+    }
+    
+    function handleCondSelectChange(e) {
+        conditionFilter = e.target.value;
+        const container = document.getElementById('listContainer');
+        if (container) container.innerHTML = renderListContainer();
+        attachFilterEvents();
+    }
 
+    // --- Инициализация ---
     (async () => {
         try {
-            currentInstruments = await getTableData();
-            renderApp();
+            await initUsers(); // загружаем пользователей из localStorage/Excel
+            const { instruments, history } = await getTableData();
+            currentInstruments = instruments;
+            currentHistory = history;
+            checkSession();
+            if (currentUser) {
+                renderApp();
+            } else {
+                document.getElementById('app').innerHTML = '';
+            }
         } catch(e) {
-            document.getElementById('app').innerHTML = `<div class="error">РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё: ${e.message}<br><br>РџСЂРѕРІРµСЂСЊС‚Рµ РїСЂРѕРєСЃРё Рё РїСѓР±Р»РёС‡РЅС‹Р№ РєР»СЋС‡.</div>`;
+            document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте прокси и публичный ключ.</div>`;
             console.error(e);
         }
     })();
+
+    document.getElementById('loginBtn').addEventListener('click', () => {
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+        login(username, password);
+        if (currentInstruments.length === 0 && currentUser) {
+            (async () => {
+                try {
+                    const { instruments, history } = await getTableData();
+                    currentInstruments = instruments;
+                    currentHistory = history;
+                    renderApp();
+                } catch(e) {
+                    document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте прокси и публичный ключ.</div>`;
+                    console.error(e);
+                }
+            })();
+        } else if (currentUser) {
+            renderApp();
+        }
+    });
 </script>
 </body>
 </html>
