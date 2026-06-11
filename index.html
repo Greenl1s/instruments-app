@@ -607,6 +607,12 @@
             `;
         }
 
+        // Функция копирования
+        const copyInfo = () => {
+            const text = `Название: ${inst.name}\nСерийный номер: ${inst.serial_number || '—'}\nМодель: ${inst.model || '—'}\nТип: ${inst.type || '—'}\n${dateLabel}: ${inst.verification_date || '—'}\nДействительно до: ${inst.valid_until || '—'}`;
+            navigator.clipboard.writeText(text).then(() => showMessage("✅ Информация скопирована!")).catch(() => showMessage("❌ Ошибка копирования", true));
+        };
+
         return `
         <div class="card">
             <div class="title">${escapeHtml(inst.name)}</div>
@@ -624,6 +630,7 @@
             ${adminButtonsHtml}
             <div class="button-group">
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
+                <button class="btn btn-edit" onclick="copyInfo()">📋 Копировать информацию</button>
                 <a href="?" class="btn btn-clear">← К списку</a>
             </div>
         </div>`;
@@ -740,7 +747,6 @@
                 searchQuery = e.target.value;
                 const listCont = document.getElementById('listContainer');
                 if (listCont) listCont.innerHTML = renderListContainer();
-                // перепривязываем обработчики селектов (они пересоздаются)
                 attachFilterEvents();
             });
         }
@@ -764,7 +770,7 @@
         verificationFilter = e.target.value;
         const container = document.getElementById('listContainer');
         if (container) container.innerHTML = renderListContainer();
-        attachFilterEvents(); // после перерисовки снова привязать события
+        attachFilterEvents();
     }
     
     function handleCondSelectChange(e) {
