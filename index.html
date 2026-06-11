@@ -30,7 +30,9 @@
         .btn-small { padding: 8px 16px; font-size: 13px; }
         .btn-status { background: #e2e8f0; color: #1e293b; margin-right: 6px; }
         .btn-status.active { background: #2563eb; color: white; }
-        .btn-logout { background: #64748b; margin-left: auto; }
+        .btn-logout { background: #64748b; }
+        .user-info { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+        .user-card { background: white; border-radius: 20px; padding: 12px 24px; display: inline-flex; align-items: center; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
         .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
@@ -56,7 +58,6 @@
         .login-box { background: white; border-radius: 24px; padding: 32px; max-width: 400px; width: 90%; text-align: center; }
         .login-box select, .login-box button { width: 100%; padding: 12px; margin-top: 15px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; }
         .login-box button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
-        .user-welcome { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 15px; flex-wrap: wrap; }
     </style>
 </head>
 <body>
@@ -118,7 +119,7 @@
         }
     }
 
-    // --- Вспомогательные функции ---
+    // --- Вспомогательные функции (сохранение, загрузка, история, утилиты) ---
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
         toast.className = 'toast';
@@ -627,7 +628,8 @@
         </div>`;
     }
 
-    function renderList() {
+    // --- Отображение списка приборов с кнопкой "Добавить прибор" для админа ---
+    function renderListContainer() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
         let filtered = currentInstruments;
@@ -643,13 +645,6 @@
         if (hasAccess(['admin'])) {
             html += `<div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>`;
         }
-        html += `<input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">`;
-        html += `<div class="filter-group">
-                    <button class="btn filter-btn ${statusFilter === 'all' ? 'active' : ''}" data-filter="all">Все</button>
-                    <button class="btn filter-btn ${statusFilter === 'поверен' ? 'active' : ''}" data-filter="поверен">Поверен</button>
-                    <button class="btn filter-btn ${statusFilter === 'не поверен' ? 'active' : ''}" data-filter="не поверен">Не поверен</button>
-                    <button class="btn filter-btn ${statusFilter === 'без поверки' ? 'active' : ''}" data-filter="без поверки">Без поверки</button>
-                </div>`;
         for (const inst of filtered) {
             const verifText = getVerificationText(inst.valid_until);
             const verifClass = getVerificationClass(inst.valid_until);
@@ -667,17 +662,64 @@
         return html;
     }
 
-    function bindSearchAndFilterEvents() {
+    // --- Рендеринг главной страницы с отдельными карточками для приветствия, поиска и списка ---
+    function renderApp() {
+        if (!currentUser) return;
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        const appDiv = document.getElementById('app');
+        if (!appDiv) return;
+        
+        if (id) {
+            const inst = currentInstruments.find(i => String(i.id) === id);
+            if (inst) {
+                window.currentInstrument = inst;
+                appDiv.innerHTML = renderCard(inst);
+            } else {
+                appDiv.innerHTML = `<div class="card error">Прибор не найден<br><a href="?" style="color:#2563eb;">← Назад</a></div>`;
+            }
+            return;
+        }
+        
+        // Главная страница: три отдельных блока
+        // 1. Блок информации о пользователе (в правом верхнем углу)
+        const userHtml = `
+            <div class="user-info">
+                <div class="user-card">
+                    <span>👋 Вы вошли как: <strong>${currentUser.role === 'admin' ? 'Администратор' : 'Пользователь'}</strong></span>
+                    <button class="btn btn-logout" onclick="logout()">Выйти</button>
+                </div>
+            </div>
+        `;
+        // 2. Карточка поиска и фильтров
+        const searchCardHtml = `
+            <div class="card">
+                <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
+                <div class="filter-group" id="filterGroup">
+                    <button class="btn filter-btn ${statusFilter === 'all' ? 'active' : ''}" data-filter="all">Все</button>
+                    <button class="btn filter-btn ${statusFilter === 'поверен' ? 'active' : ''}" data-filter="поверен">Поверен</button>
+                    <button class="btn filter-btn ${statusFilter === 'не поверен' ? 'active' : ''}" data-filter="не поверен">Не поверен</button>
+                    <button class="btn filter-btn ${statusFilter === 'без поверки' ? 'active' : ''}" data-filter="без поверки">Без поверки</button>
+                </div>
+            </div>
+        `;
+        // 3. Контейнер для списка оборудования (будет обновляться отдельно)
+        const listContainerHtml = `<div id="listContainer"></div>`;
+        
+        appDiv.innerHTML = userHtml + searchCardHtml + listContainerHtml;
+        
+        // Обновляем список
+        const container = document.getElementById('listContainer');
+        if (container) container.innerHTML = renderListContainer();
+        
+        // Привязываем обработчики поиска и фильтров
         const searchField = document.getElementById('globalSearchInput');
         if (searchField) {
             searchField.value = searchQuery;
-            const newSearch = searchField.cloneNode(true);
-            searchField.parentNode.replaceChild(newSearch, searchField);
-            newSearch.addEventListener('input', (e) => {
+            searchField.addEventListener('input', (e) => {
                 searchQuery = e.target.value;
-                const container = document.getElementById('listContainer');
-                if (container) container.innerHTML = renderList();
-                bindSearchAndFilterEvents();
+                const listCont = document.getElementById('listContainer');
+                if (listCont) listCont.innerHTML = renderListContainer();
             });
         }
         const filterButtons = document.querySelectorAll('.filter-btn');
@@ -686,42 +728,16 @@
             btn.addEventListener('click', handleFilterClick);
         });
     }
-
+    
     function handleFilterClick(e) {
         statusFilter = e.currentTarget.getAttribute('data-filter');
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         e.currentTarget.classList.add('active');
         const container = document.getElementById('listContainer');
-        if (container) container.innerHTML = renderList();
-        bindSearchAndFilterEvents();
+        if (container) container.innerHTML = renderListContainer();
     }
 
-    function renderApp() {
-        if (!currentUser) return;
-        const urlParams = new URLSearchParams(window.location.search);
-        const id = urlParams.get('id');
-        const appDiv = document.getElementById('app');
-        if (!appDiv) return;
-        const welcomeHtml = `
-            <div class="card user-welcome">
-                <span>👋 Вы вошли как: <strong>${currentUser.role === 'admin' ? 'Администратор' : 'Пользователь'}</strong></span>
-                <button class="btn btn-logout" onclick="logout()">Выйти</button>
-            </div>
-        `;
-        if (id) {
-            const inst = currentInstruments.find(i => String(i.id) === id);
-            if (inst) {
-                window.currentInstrument = inst;
-                appDiv.innerHTML = welcomeHtml + renderCard(inst);
-            } else {
-                appDiv.innerHTML = welcomeHtml + `<div class="card error">Прибор не найден<br><a href="?" style="color:#2563eb;">← Назад</a></div>`;
-            }
-        } else {
-            appDiv.innerHTML = welcomeHtml + renderList();
-            bindSearchAndFilterEvents();
-        }
-    }
-
+    // --- Инициализация ---
     (async () => {
         try {
             const { instruments, history } = await getTableData();
