@@ -59,6 +59,8 @@
         .login-box { background: white; border-radius: 24px; padding: 32px; max-width: 400px; width: 90%; text-align: center; }
         .login-box input, .login-box select, .login-box button { width: 100%; padding: 12px; margin-top: 15px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; }
         .login-box button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
+        .user-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e2e8f0; }
+        .user-list-item:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
@@ -87,41 +89,43 @@
     let searchQuery = "";
     let verificationFilter = "all";
     let conditionFilter = "all";
-    let currentUser = null; // { username, role }
-
-    // ---------- Управление пользователями (синхронизация с Excel и localStorage) ----------
+    let currentUser = null;
     let usersCache = []; // кэш пользователей
 
+    // ---------- Работа с пользователями (синхронизация с Excel) ----------
     async function loadUsersFromExcel() {
-        // Читаем лист "Пользователи" из того же файла, где и приборы
-        const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
-        const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
-        const response = await fetch(proxiedApiUrl);
-        if (!response.ok) return null;
-        const data = await response.json();
-        if (!data.href) return null;
-        const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
-        const fileResponse = await fetch(proxiedFileUrl);
-        const blob = await fileResponse.blob();
-        const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
-        const sheet = workbook.Sheets["Пользователи"];
-        if (!sheet) return [];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-        if (!rows || rows.length < 2) return [];
-        const users = [];
-        for (let i = 1; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row || row.length < 2) continue;
-            const username = row[0]?.toString().trim();
-            const password = row[1]?.toString().trim();
-            const role = row[2]?.toString().trim() === 'admin' ? 'admin' : 'employee';
-            if (username && password) users.push({ username, password, role });
+        try {
+            const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
+            const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
+            const response = await fetch(proxiedApiUrl);
+            if (!response.ok) return null;
+            const data = await response.json();
+            if (!data.href) return null;
+            const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
+            const fileResponse = await fetch(proxiedFileUrl);
+            const blob = await fileResponse.blob();
+            const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+            const sheet = workbook.Sheets["Пользователи"];
+            if (!sheet) return [];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+            if (!rows || rows.length < 2) return [];
+            const users = [];
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                if (!row || row.length < 2) continue;
+                const username = row[0]?.toString().trim();
+                const password = row[1]?.toString().trim();
+                const role = row[2]?.toString().trim() === 'admin' ? 'admin' : 'employee';
+                if (username && password) users.push({ username, password, role });
+            }
+            return users;
+        } catch(e) {
+            console.error("Ошибка загрузки пользователей из Excel", e);
+            return null;
         }
-        return users;
     }
 
     async function saveUsersToExcel(users) {
-        // Сохраняем лист "Пользователи" в тот же Excel-файл
         try {
             // 1. Получить текущий файл
             const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
@@ -135,7 +139,7 @@
             const blob = await fileResponse.blob();
             const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
             
-            // 2. Создать/обновить лист "Пользователи"
+            // 2. Обновить лист "Пользователи"
             const sheetData = [["Имя пользователя", "Пароль", "Роль"]];
             for (const u of users) {
                 sheetData.push([u.username, u.password, u.role === 'admin' ? 'admin' : 'employee']);
@@ -175,13 +179,12 @@
                     usersCache = defaultUsers;
                     await saveUsersToExcel(defaultUsers);
                 } else {
-                    usersCache = JSON.parse(localocalUsers);
+                    usersCache = JSON.parse(localUsers);
                     await saveUsersToExcel(usersCache);
                 }
             }
         } catch (e) {
             console.error("Ошибка инициализации пользователей", e);
-            // fallback на localStorage
             let localUsers = localStorage.getItem('app_users');
             if (!localUsers) {
                 localUsers = [{ username: 'admin', password: 'admin', role: 'admin' }];
@@ -195,7 +198,7 @@
     function saveUsersLocally(users) {
         usersCache = users;
         localStorage.setItem('app_users', JSON.stringify(users));
-        saveUsersToExcel(users); // фоном синхронизируем с Excel
+        saveUsersToExcel(users); // синхронизация с Excel
     }
 
     function addUser(username, password, role) {
@@ -217,7 +220,7 @@
     }
 
     function deleteUser(username) {
-        if (username === 'admin') return false; // нельзя удалить админа
+        if (username === 'admin') return false;
         const users = getUsers();
         const newUsers = users.filter(u => u.username !== username);
         saveUsersLocally(newUsers);
@@ -273,8 +276,8 @@
             <div class="form-group"><label>Пароль</label><input type="password" id="newPassword" placeholder="придумайте пароль"></div>
             <div class="form-group"><label>Права доступа</label>
                 <select id="newRole">
-                    <option value="admin">Администратор</option>
                     <option value="employee">Сотрудник</option>
+                    <option value="admin">Администратор</option>
                 </select>
             </div>
             <div class="button-group">
@@ -319,7 +322,10 @@
         });
         const formHtml = `
             <div id="usersList">${rowsHtml}</div>
-            <div class="button-group"><button class="btn btn-clear" id="closeUsersBtn">Закрыть</button></div>
+            <div class="button-group">
+                <button class="btn btn-add-user" onclick="showAddUserForm()">➕ Добавить сотрудника</button>
+                <button class="btn btn-clear" id="closeUsersBtn">Закрыть</button>
+            </div>
         `;
         showModal('Управление сотрудниками', formHtml);
         document.getElementById('closeUsersBtn').onclick = () => {
@@ -336,8 +342,8 @@
             <div class="form-group"><label>Новый пароль</label><input type="password" id="editPassword" placeholder="Оставьте пустым, чтобы не менять"></div>
             <div class="form-group"><label>Права доступа</label>
                 <select id="editRole">
-                    <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Администратор</option>
                     <option value="employee" ${user.role === 'employee' ? 'selected' : ''}>Сотрудник</option>
+                    <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Администратор</option>
                 </select>
             </div>
             <div class="button-group">
@@ -359,12 +365,11 @@
                 showMessage(`Пользователь ${oldUsername} обновлён`);
                 document.getElementById('customModal').style.display = 'none';
                 if (currentUser.username === oldUsername) {
-                    // если текущий пользователь изменил свои данные, обновляем сессию
                     currentUser.username = newUsername;
                     currentUser.role = newRole;
                     sessionStorage.setItem('instrumentUser', JSON.stringify(currentUser));
                 }
-                renderApp(); // обновляем интерфейс (кнопка "Добавить сотрудника" может измениться)
+                renderApp();
             } else {
                 showMessage('Не удалось обновить (возможно, имя уже занято)', true);
             }
@@ -471,7 +476,7 @@
 
             const headersRow = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
                                 "Дата поверки", "Действительно до", "Ссылка на документ",
-                                "Кто взял", "Куда взял", "Дата выдачи", "Состояние"];
+                                "Кто взял", "Место использования", "Дата выдачи", "Состояние"];
             const wsData = [
                 headersRow,
                 ...currentInstruments.map(inst => [
@@ -483,7 +488,7 @@
             ];
             const wsInstruments = XLSX.utils.aoa_to_sheet(wsData);
 
-            const historyHeaders = ["ID прибора", "Название", "Кто взял", "Куда взял", "Дата выдачи", "Дата возврата"];
+            const historyHeaders = ["ID прибора", "Название", "Кто взял", "Место использования", "Дата выдачи", "Дата возврата"];
             const historyData = [
                 historyHeaders,
                 ...currentHistory.map(rec => [
@@ -785,7 +790,7 @@
             <div class="form-group"><label>Действительно до</label><input type="date" id="edit_valid" value="${instrument.valid_until || ''}"></div>
             <div class="form-group"><label>Ссылка на документ</label><input type="text" id="edit_doc" value="${escapeHtml(instrument.document_url)}"></div>
             <div class="form-group"><label>Кто взял</label><input type="text" id="edit_taken_by" value="${escapeHtml(instrument.taken_by)}"></div>
-            <div class="form-group"><label>Куда взял</label><input type="text" id="edit_taken_where" value="${escapeHtml(instrument.taken_where)}"></div>
+            <div class="form-group"><label>Место использования</label><input type="text" id="edit_taken_where" value="${escapeHtml(instrument.taken_where)}"></div>
             <div class="form-group"><label>Дата выдачи</label><input type="date" id="edit_taken_date" value="${instrument.taken_date || ''}"></div>
             <button class="btn btn-edit" id="saveAllBtn">Сохранить изменения</button>
             <button class="btn btn-clear" id="cancelAllBtn">Отмена</button>
@@ -823,44 +828,45 @@
         };
     }
 
-    function showEditForm(instrument) {
+    function showIssueForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
-            <div class="form-group"><label>Место использования</label><input type="text" id="takenWhere" value="${escapeHtml(instrument.taken_where)}" placeholder="Например: Лаборатория 3"></div>
-            <button class="btn btn-edit" id="saveBtn">✅ Взять прибор</button>
-            <button class="btn btn-clear" id="clearBtn">❌ Очистить</button>
+            <div class="form-group"><label>Место использования</label><input type="text" id="takenWhere" placeholder="например, Лаборатория 3"></div>
+            <div class="form-group"><label>Дата выдачи</label><input type="date" id="takenDate" value="${today}"></div>
+            <button class="btn btn-edit" id="saveIssueBtn">📝 Выдать прибор</button>
+            <button class="btn btn-clear" id="cancelIssueBtn">Отмена</button>
         `;
-        showModal(`Взять прибор: ${escapeHtml(instrument.name)}`, formHtml);
-        document.getElementById('saveBtn').onclick = async () => {
-            const newTakenWhere = document.getElementById('takenWhere').value;
-            const newTakenBy = currentUser.username;
-            const newTakenDate = new Date().toISOString().slice(0,10);
+        showModal(`Выдача прибора: ${escapeHtml(instrument.name)}`, formHtml);
+        document.getElementById('saveIssueBtn').onclick = async () => {
+            const newTakenWhere = document.getElementById('takenWhere').value.trim();
+            const newTakenDate = document.getElementById('takenDate').value;
             if (!newTakenWhere) {
                 showMessage('Укажите место использования', true);
                 return;
             }
+            const newTakenBy = currentUser.username;
             addHistoryEntry(instrument, newTakenBy, newTakenWhere, newTakenDate);
             instrument.taken_by = newTakenBy;
             instrument.taken_where = newTakenWhere;
             instrument.taken_date = newTakenDate;
             instrument.condition = 'busy';
-            document.getElementById('customModal').style.display = 'none';
+            closeModal();
             renderApp();
             await saveToYandex();
-            showMessage(`✅ Прибор взят ${newTakenBy}`);
+            showMessage(`✅ Прибор выдан сотруднику ${newTakenBy}`);
         };
-        document.getElementById('clearBtn').onclick = async () => {
-            const returnDate = new Date().toISOString().slice(0,10);
-            closeHistoryEntry(instrument, returnDate);
-            instrument.taken_by = '';
-            instrument.taken_where = '';
-            instrument.taken_date = '';
-            if (instrument.condition !== 'broken') instrument.condition = 'free';
-            document.getElementById('customModal').style.display = 'none';
-            renderApp();
-            await saveToYandex();
-            showMessage("✅ Прибор возвращён");
-        };
+        document.getElementById('cancelIssueBtn').onclick = closeModal;
+    }
+
+    function returnInstrument(instrument) {
+        const returnDate = new Date().toISOString().slice(0,10);
+        closeHistoryEntry(instrument, returnDate);
+        instrument.taken_by = '';
+        instrument.taken_where = '';
+        instrument.taken_date = '';
+        if (instrument.condition !== 'broken') instrument.condition = 'free';
+        renderApp();
+        saveToYandex().then(() => showMessage('Прибор возвращён!'));
     }
 
     function escapeHtml(str) {
@@ -894,7 +900,7 @@
         }
     };
 
-    // --- Карточка прибора (с учётом роли) ---
+    // --- Карточка прибора ---
     function renderCard(inst) {
         const verifText = getVerificationText(inst.valid_until);
         const verifClass = getVerificationClass(inst.valid_until);
@@ -913,16 +919,9 @@
 
         let issueButton = '';
         if (hasTaken) {
-            issueButton = `<button class="btn btn-clear" onclick="(() => { 
-                const returnDate = new Date().toISOString().slice(0,10);
-                closeHistoryEntry(currentInstrument, returnDate);
-                currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
-                if (currentInstrument.condition !== 'broken') currentInstrument.condition = 'free';
-                renderApp(); 
-                saveToYandex().then(() => showMessage('Прибор возвращён!'));
-            })()">📦 Положить прибор</button>`;
+            issueButton = `<button class="btn btn-clear" onclick="returnInstrument(currentInstrument)">📦 Положить прибор</button>`;
         } else {
-            issueButton = `<button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>`;
+            issueButton = `<button class="btn btn-edit" onclick="showIssueForm(currentInstrument)">📝 Взять прибор</button>`;
         }
 
         let adminExtraHtml = '';
@@ -1105,7 +1104,7 @@
     // --- Инициализация ---
     (async () => {
         try {
-            await initUsers(); // загружаем пользователей из localStorage/Excel
+            await initUsers();
             const { instruments, history } = await getTableData();
             currentInstruments = instruments;
             currentHistory = history;
