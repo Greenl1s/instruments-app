@@ -560,20 +560,18 @@
         });
     }
 
-    // Глобальная функция копирования информации о приборе
-    async function copyInstrumentInfo(instrumentId) {
-        const instrument = currentInstruments.find(i => i.id == instrumentId);
-        if (!instrument) {
-            showMessage("Прибор не найден", true);
+    // Глобальная функция для копирования информации о приборе
+    window.copyInstrumentInfo = () => {
+        if (!window.currentInstrument) {
+            showMessage("❌ Нет данных для копирования", true);
             return;
         }
-        const dateLabel = instrument.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
-        const text = `Название: ${instrument.name}\nСерийный номер: ${instrument.serial_number || '—'}\nМодель: ${instrument.model || '—'}\nТип: ${instrument.type || '—'}\n${dateLabel}: ${instrument.verification_date || '—'}\nДействительно до: ${instrument.valid_until || '—'}`;
-        try {
-            await navigator.clipboard.writeText(text);
-            showMessage("✅ Информация скопирована!");
-        } catch (err) {
-            // fallback
+        const inst = window.currentInstrument;
+        const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
+        const text = `Название: ${inst.name}\nСерийный номер: ${inst.serial_number || '—'}\nМодель: ${inst.model || '—'}\nТип: ${inst.type || '—'}\n${dateLabel}: ${inst.verification_date || '—'}\nДействительно до: ${inst.valid_until || '—'}\nСсылка на документ: ${inst.document_url || '—'}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => showMessage("✅ Информация скопирована!")).catch(() => showMessage("❌ Ошибка копирования", true));
+        } else {
             const textarea = document.createElement('textarea');
             textarea.value = text;
             document.body.appendChild(textarea);
@@ -582,9 +580,9 @@
             document.body.removeChild(textarea);
             showMessage("✅ Информация скопирована!");
         }
-    }
+    };
 
-    // --- Карточка прибора с исправленными кнопками ---
+    // --- Карточка прибора ---
     function renderCard(inst) {
         const verifText = getVerificationText(inst.valid_until);
         const verifClass = getVerificationClass(inst.valid_until);
@@ -601,23 +599,22 @@
         const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">📄 Открыть документ</a>` : '—';
         const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
 
-        // Кнопки выдачи (взаимоисключающие)
-        let issueButtons = '';
+        // Кнопка выдачи (только одна)
+        let issueButton = '';
         if (hasTaken) {
-            issueButtons = `<button class="btn btn-clear" onclick="(async () => { 
+            issueButton = `<button class="btn btn-clear" onclick="(() => { 
                 const returnDate = new Date().toISOString().slice(0,10);
                 closeHistoryEntry(currentInstrument, returnDate);
                 currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
                 if (currentInstrument.condition !== 'broken') currentInstrument.condition = 'free';
                 renderApp(); 
-                await saveToYandex(); 
-                showMessage('Прибор возвращён!');
+                saveToYandex().then(() => showMessage('Прибор возвращён!'));
             })()">📦 Положить прибор</button>`;
         } else {
-            issueButtons = `<button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>`;
+            issueButton = `<button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>`;
         }
 
-        // Блок для администратора
+        // Дополнительные кнопки для администратора
         let adminExtraHtml = '';
         if (hasAccess(['admin'])) {
             adminExtraHtml = `
@@ -649,9 +646,9 @@
             ${takenHtml}
             ${adminExtraHtml}
             <div class="button-group">
-                ${issueButtons}
+                ${issueButton}
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
-                <button class="btn btn-edit" onclick="copyInstrumentInfo('${inst.id}')">📋 Копировать информацию</button>
+                <button class="btn btn-edit" onclick="window.copyInstrumentInfo()">📋 Копировать информацию</button>
                 <a href="?" class="btn btn-clear">← К списку</a>
             </div>
         </div>`;
