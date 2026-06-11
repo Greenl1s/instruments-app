@@ -59,8 +59,6 @@
         .login-box { background: white; border-radius: 24px; padding: 32px; max-width: 400px; width: 90%; text-align: center; }
         .login-box input, .login-box select, .login-box button { width: 100%; padding: 12px; margin-top: 15px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; }
         .login-box button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
-        .user-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e2e8f0; }
-        .user-list-item:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
@@ -86,51 +84,26 @@
 
     let currentInstruments = [];
     let currentHistory = [];
-    let currentUsers = [];      // список пользователей из Excel
     let searchQuery = "";
     let verificationFilter = "all";
     let conditionFilter = "all";
-    let currentUser = null;
+    let currentUser = null; // { username, role }
 
-    // ---------- Работа с пользователями (синхронизация с Excel) ----------
-    async function syncUsersToExcel() {
-        // Сохраняем currentUsers в Excel (лист "Пользователи")
-        try {
-            const proxyBase = PROXY_URL.split('?')[0];
-            const response = await fetch(`${proxyBase}?get_upload_url=1`, {
-                headers: { 'X-Write-Secret': WRITE_SECRET }
-            });
-            if (!response.ok) throw new Error('Не удалось получить ссылку');
-            const { href } = await response.json();
-            if (!href) throw new Error('Нет ссылки');
+    // ---------- Управление пользователями (синхронизация с Excel и localStorage) ----------
+    let usersCache = []; // кэш пользователей
 
-            // Загружаем текущий файл, чтобы не потерять остальные листы
-            const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
-            const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
-            const fileResp = await fetch(proxiedApiUrl);
-            const fileData = await fileResp.blob();
-            const workbook = XLSX.read(await fileData.arrayBuffer(), { type: 'array' });
-            
-            // Обновляем или создаём лист "Пользователи"
-            const usersData = [
-                ["Имя пользователя", "Пароль", "Роль"],
-                ...currentUsers.map(u => [u.username, u.password, u.role])
-            ];
-            const wsUsers = XLSX.utils.aoa_to_sheet(usersData);
-            workbook.Sheets["Пользователи"] = wsUsers;
-            if (!workbook.SheetNames.includes("Пользователи")) workbook.SheetNames.push("Пользователи");
-            
-            // Обновляем файл на Диске
-            const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const putResp = await fetch(href, { method: 'PUT', body: blob, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } });
-            if (!putResp.ok) throw new Error('Ошибка загрузки');
-        } catch(e) {
-            console.error("Синхронизация пользователей с Excel не удалась:", e);
-        }
-    }
-
-    function loadUsersFromExcel(workbook) {
+    async function loadUsersFromExcel() {
+        // Читаем лист "Пользователи" из того же файла, где и приборы
+        const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
+        const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
+        const response = await fetch(proxiedApiUrl);
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (!data.href) return null;
+        const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
+        const fileResponse = await fetch(proxiedFileUrl);
+        const blob = await fileResponse.blob();
+        const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
         const sheet = workbook.Sheets["Пользователи"];
         if (!sheet) return [];
         const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
@@ -138,73 +111,122 @@
         const users = [];
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
-            if (!row || row.length < 3) continue;
-            const username = row[0] ? String(row[0]).trim() : '';
-            const password = row[1] ? String(row[1]).trim() : '';
-            const role = row[2] ? String(row[2]).trim() : 'employee';
+            if (!row || row.length < 2) continue;
+            const username = row[0]?.toString().trim();
+            const password = row[1]?.toString().trim();
+            const role = row[2]?.toString().trim() === 'admin' ? 'admin' : 'employee';
             if (username && password) users.push({ username, password, role });
         }
         return users;
     }
 
-    // Инициализация пользователей (из localStorage или Excel)
-    async function initUsers() {
-        // Сначала пытаемся загрузить из Excel, если он уже есть
+    async function saveUsersToExcel(users) {
+        // Сохраняем лист "Пользователи" в тот же Excel-файл
         try {
+            // 1. Получить текущий файл
             const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
             const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
             const response = await fetch(proxiedApiUrl);
-            const blob = await response.blob();
+            if (!response.ok) throw new Error("Не удалось загрузить файл");
+            const data = await response.json();
+            if (!data.href) throw new Error("Нет ссылки");
+            const proxiedFileUrl = PROXY_URL + encodeURIComponent(data.href);
+            const fileResponse = await fetch(proxiedFileUrl);
+            const blob = await fileResponse.blob();
             const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
-            const usersFromExcel = loadUsersFromExcel(workbook);
-            if (usersFromExcel.length > 0) {
-                currentUsers = usersFromExcel;
-                localStorage.setItem('app_users_backup', JSON.stringify(currentUsers));
-                return;
+            
+            // 2. Создать/обновить лист "Пользователи"
+            const sheetData = [["Имя пользователя", "Пароль", "Роль"]];
+            for (const u of users) {
+                sheetData.push([u.username, u.password, u.role === 'admin' ? 'admin' : 'employee']);
             }
-        } catch(e) { console.log("Не удалось загрузить пользователей из Excel", e); }
-        
-        // Если нет в Excel, берём из localStorage или создаём admin
-        let users = localStorage.getItem('app_users_backup');
-        if (!users) {
-            currentUsers = [{ username: 'admin', password: 'admin', role: 'admin' }];
-            localStorage.setItem('app_users_backup', JSON.stringify(currentUsers));
-        } else {
-            currentUsers = JSON.parse(users);
+            const ws = XLSX.utils.aoa_to_sheet(sheetData);
+            workbook.Sheets["Пользователи"] = ws;
+            if (!workbook.SheetNames.includes("Пользователи")) workbook.SheetNames.push("Пользователи");
+            
+            // 3. Сохранить обратно на Диск
+            const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            const blobOut = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            
+            const proxyBase = PROXY_URL.split('?')[0];
+            const uploadResp = await fetch(`${proxyBase}?get_upload_url=1`, {
+                headers: { 'X-Write-Secret': WRITE_SECRET }
+            });
+            if (!uploadResp.ok) throw new Error("Не удалось получить ссылку для загрузки");
+            const { href } = await uploadResp.json();
+            const putResp = await fetch(href, { method: 'PUT', body: blobOut, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } });
+            if (!putResp.ok) throw new Error("Ошибка загрузки");
+        } catch (err) {
+            console.error("Ошибка сохранения пользователей в Excel:", err);
         }
-        // Синхронизируем с Excel
-        await syncUsersToExcel();
     }
 
-    function getUsers() { return currentUsers; }
-    function saveUsers(users) {
-        currentUsers = users;
-        localStorage.setItem('app_users_backup', JSON.stringify(currentUsers));
-        syncUsersToExcel();
+    async function initUsers() {
+        try {
+            const excelUsers = await loadUsersFromExcel();
+            if (excelUsers && excelUsers.length > 0) {
+                usersCache = excelUsers;
+                localStorage.setItem('app_users', JSON.stringify(usersCache));
+            } else {
+                let localUsers = localStorage.getItem('app_users');
+                if (!localUsers) {
+                    const defaultUsers = [{ username: 'admin', password: 'admin', role: 'admin' }];
+                    localStorage.setItem('app_users', JSON.stringify(defaultUsers));
+                    usersCache = defaultUsers;
+                    await saveUsersToExcel(defaultUsers);
+                } else {
+                    usersCache = JSON.parse(localocalUsers);
+                    await saveUsersToExcel(usersCache);
+                }
+            }
+        } catch (e) {
+            console.error("Ошибка инициализации пользователей", e);
+            // fallback на localStorage
+            let localUsers = localStorage.getItem('app_users');
+            if (!localUsers) {
+                localUsers = [{ username: 'admin', password: 'admin', role: 'admin' }];
+                localStorage.setItem('app_users', JSON.stringify(localUsers));
+            }
+            usersCache = JSON.parse(localUsers);
+        }
     }
+
+    function getUsers() { return usersCache; }
+    function saveUsersLocally(users) {
+        usersCache = users;
+        localStorage.setItem('app_users', JSON.stringify(users));
+        saveUsersToExcel(users); // фоном синхронизируем с Excel
+    }
+
     function addUser(username, password, role) {
-        if (currentUsers.find(u => u.username === username)) return false;
-        currentUsers.push({ username, password, role });
-        saveUsers(currentUsers);
+        const users = getUsers();
+        if (users.find(u => u.username === username)) return false;
+        users.push({ username, password, role });
+        saveUsersLocally(users);
         return true;
     }
+
     function updateUser(oldUsername, newUsername, newPassword, newRole) {
-        const index = currentUsers.findIndex(u => u.username === oldUsername);
+        const users = getUsers();
+        const index = users.findIndex(u => u.username === oldUsername);
         if (index === -1) return false;
-        currentUsers[index] = { username: newUsername, password: newPassword, role: newRole };
-        saveUsers(currentUsers);
+        if (newUsername !== oldUsername && users.find(u => u.username === newUsername)) return false;
+        users[index] = { username: newUsername, password: newPassword, role: newRole };
+        saveUsersLocally(users);
         return true;
     }
+
     function deleteUser(username) {
-        if (username === 'admin') return false;
-        const index = currentUsers.findIndex(u => u.username === username);
-        if (index === -1) return false;
-        currentUsers.splice(index, 1);
-        saveUsers(currentUsers);
+        if (username === 'admin') return false; // нельзя удалить админа
+        const users = getUsers();
+        const newUsers = users.filter(u => u.username !== username);
+        saveUsersLocally(newUsers);
         return true;
     }
+
     function validateUser(username, password) {
-        const user = currentUsers.find(u => u.username === username && u.password === password);
+        const users = getUsers();
+        const user = users.find(u => u.username === username && u.password === password);
         return user ? { username: user.username, role: user.role } : null;
     }
 
@@ -244,143 +266,165 @@
         }
     }
 
-    // ---------- Управление сотрудниками (модальное окно для админа) ----------
-    function showUserManagement() {
-        const users = getUsers();
-        let usersHtml = '<div style="max-height: 300px; overflow-y: auto;">';
-        users.forEach(u => {
-            usersHtml += `<div class="user-list-item">
-                <div><strong>${escapeHtml(u.username)}</strong> (${u.role === 'admin' ? 'Админ' : 'Сотрудник'})</div>
-                <div>
-                    <button class="btn btn-small btn-edit" onclick="editUser('${escapeHtml(u.username)}')">✏️</button>
-                    ${u.username !== 'admin' ? `<button class="btn btn-small btn-delete" onclick="deleteUserConfirm('${escapeHtml(u.username)}')">🗑️</button>` : ''}
-                </div>
-            </div>`;
-        });
-        usersHtml += '</div><div class="button-group" style="margin-top:15px;"><button class="btn btn-add-user" onclick="showAddUserForm()">➕ Добавить сотрудника</button><button class="btn btn-clear" onclick="closeModal()">Закрыть</button></div>';
-        showModal('Управление сотрудниками', usersHtml);
-    }
-
+    // ---------- Формы управления сотрудниками (только для админа) ----------
     function showAddUserForm() {
         const formHtml = `
-            <div class="form-group"><label>Имя пользователя</label><input type="text" id="newUsername" placeholder="ivanov"></div>
+            <div class="form-group"><label>Имя сотрудника</label><input type="text" id="newUsername" placeholder="ivanov"></div>
             <div class="form-group"><label>Пароль</label><input type="password" id="newPassword" placeholder="придумайте пароль"></div>
-            <div class="form-group"><label>Роль</label>
+            <div class="form-group"><label>Права доступа</label>
                 <select id="newRole">
-                    <option value="employee">Сотрудник</option>
                     <option value="admin">Администратор</option>
+                    <option value="employee">Сотрудник</option>
                 </select>
             </div>
             <div class="button-group">
-                <button class="btn btn-add-user" id="confirmAddUserBtn">➕ Добавить</button>
+                <button class="btn btn-add-user" id="confirmAddUserBtn">➕ Добавить сотрудника</button>
                 <button class="btn btn-clear" id="cancelAddUserBtn">Отмена</button>
             </div>
         `;
-        showModal('Добавление сотрудника', formHtml);
+        showModal('Добавление нового сотрудника', formHtml);
         document.getElementById('confirmAddUserBtn').onclick = () => {
             const username = document.getElementById('newUsername').value.trim();
             const password = document.getElementById('newPassword').value.trim();
             const role = document.getElementById('newRole').value;
-            if (!username || !password) { showMessage('Заполните все поля', true); return; }
+            if (!username || !password) {
+                showMessage('Заполните имя и пароль', true);
+                return;
+            }
             if (addUser(username, password, role)) {
-                showMessage(`Сотрудник ${username} добавлен`);
-                closeModal();
-                showUserManagement();
+                showMessage(`Сотрудник ${username} добавлен!`);
+                document.getElementById('customModal').style.display = 'none';
             } else {
-                showMessage('Пользователь уже существует', true);
+                showMessage('Пользователь с таким именем уже существует', true);
             }
         };
-        document.getElementById('cancelAddUserBtn').onclick = closeModal;
+        document.getElementById('cancelAddUserBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
     }
 
-    function editUser(username) {
-        const user = getUsers().find(u => u.username === username);
+    function showManageUsersForm() {
+        const users = getUsers();
+        let rowsHtml = '';
+        users.forEach(u => {
+            rowsHtml += `
+                <div style="border-bottom:1px solid #e2e8f0; padding:10px 0; display:flex; justify-content:space-between; align-items:center;">
+                    <span><strong>${escapeHtml(u.username)}</strong> (${u.role === 'admin' ? 'Админ' : 'Сотрудник'})</span>
+                    <div>
+                        <button class="btn btn-small btn-edit" onclick="editUser('${u.username}')">✏️</button>
+                        ${u.username !== 'admin' ? `<button class="btn btn-small btn-delete" onclick="deleteUserAccount('${u.username}')">🗑️</button>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        const formHtml = `
+            <div id="usersList">${rowsHtml}</div>
+            <div class="button-group"><button class="btn btn-clear" id="closeUsersBtn">Закрыть</button></div>
+        `;
+        showModal('Управление сотрудниками', formHtml);
+        document.getElementById('closeUsersBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+    }
+
+    window.editUser = (oldUsername) => {
+        const users = getUsers();
+        const user = users.find(u => u.username === oldUsername);
         if (!user) return;
         const formHtml = `
             <div class="form-group"><label>Имя пользователя</label><input type="text" id="editUsername" value="${escapeHtml(user.username)}"></div>
-            <div class="form-group"><label>Новый пароль</label><input type="password" id="editPassword" placeholder="оставьте пустым, чтобы не менять"></div>
-            <div class="form-group"><label>Роль</label>
+            <div class="form-group"><label>Новый пароль</label><input type="password" id="editPassword" placeholder="Оставьте пустым, чтобы не менять"></div>
+            <div class="form-group"><label>Права доступа</label>
                 <select id="editRole">
-                    <option value="employee" ${user.role === 'employee' ? 'selected' : ''}>Сотрудник</option>
                     <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Администратор</option>
+                    <option value="employee" ${user.role === 'employee' ? 'selected' : ''}>Сотрудник</option>
                 </select>
             </div>
             <div class="button-group">
-                <button class="btn btn-edit" id="confirmEditUserBtn">💾 Сохранить</button>
-                <button class="btn btn-clear" id="cancelEditUserBtn">Отмена</button>
+                <button class="btn btn-edit" id="saveEditBtn">Сохранить</button>
+                <button class="btn btn-clear" id="cancelEditBtn">Отмена</button>
             </div>
         `;
-        showModal(`Редактирование пользователя ${username}`, formHtml);
-        document.getElementById('confirmEditUserBtn').onclick = () => {
+        showModal(`Редактирование пользователя ${oldUsername}`, formHtml);
+        document.getElementById('saveEditBtn').onclick = () => {
             const newUsername = document.getElementById('editUsername').value.trim();
-            const newPassword = document.getElementById('editPassword').value.trim();
+            let newPassword = document.getElementById('editPassword').value.trim();
             const newRole = document.getElementById('editRole').value;
-            if (!newUsername) { showMessage('Имя не может быть пустым', true); return; }
-            const finalPassword = newPassword || user.password;
-            if (updateUser(username, newUsername, finalPassword, newRole)) {
-                showMessage(`Пользователь ${username} обновлён`);
-                closeModal();
-                if (currentUser.username === username) {
-                    // если меняем себя, обновляем текущую сессию
-                    currentUser = { username: newUsername, role: newRole };
+            if (!newUsername) {
+                showMessage('Имя не может быть пустым', true);
+                return;
+            }
+            if (newPassword === '') newPassword = user.password;
+            if (updateUser(oldUsername, newUsername, newPassword, newRole)) {
+                showMessage(`Пользователь ${oldUsername} обновлён`);
+                document.getElementById('customModal').style.display = 'none';
+                if (currentUser.username === oldUsername) {
+                    // если текущий пользователь изменил свои данные, обновляем сессию
+                    currentUser.username = newUsername;
+                    currentUser.role = newRole;
                     sessionStorage.setItem('instrumentUser', JSON.stringify(currentUser));
                 }
-                showUserManagement();
+                renderApp(); // обновляем интерфейс (кнопка "Добавить сотрудника" может измениться)
             } else {
-                showMessage('Ошибка обновления', true);
+                showMessage('Не удалось обновить (возможно, имя уже занято)', true);
             }
         };
-        document.getElementById('cancelEditUserBtn').onclick = closeModal;
-    }
+        document.getElementById('cancelEditBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+    };
 
-    function deleteUserConfirm(username) {
-        if (confirm(`Удалить пользователя "${username}"? Это действие нельзя отменить.`)) {
+    window.deleteUserAccount = (username) => {
+        if (confirm(`Удалить пользователя ${username}?`)) {
             if (deleteUser(username)) {
                 showMessage(`Пользователь ${username} удалён`);
-                showUserManagement();
+                if (currentUser.username === username) {
+                    logout();
+                } else {
+                    document.getElementById('customModal').style.display = 'none';
+                    renderApp();
+                }
             } else {
                 showMessage('Нельзя удалить администратора', true);
             }
         }
-    }
+    };
 
-    function closeModal() {
-        const modal = document.getElementById('customModal');
-        if (modal) modal.style.display = 'none';
-    }
-
-    // ---------- Редактирование профиля (смена пароля и имени) ----------
-    function showProfileForm() {
+    // ---------- Редактирование профиля текущего пользователя ----------
+    function showEditProfileForm() {
         const formHtml = `
-            <div class="form-group"><label>Имя пользователя</label><input type="text" id="profileUsername" value="${escapeHtml(currentUser.username)}"></div>
-            <div class="form-group"><label>Новый пароль</label><input type="password" id="profilePassword" placeholder="оставьте пустым, чтобы не менять"></div>
+            <div class="form-group"><label>Новое имя пользователя</label><input type="text" id="profileUsername" value="${escapeHtml(currentUser.username)}"></div>
+            <div class="form-group"><label>Новый пароль</label><input type="password" id="profilePassword" placeholder="Оставьте пустым, чтобы не менять"></div>
             <div class="button-group">
-                <button class="btn btn-edit" id="saveProfileBtn">💾 Сохранить изменения</button>
+                <button class="btn btn-edit" id="saveProfileBtn">Сохранить изменения</button>
                 <button class="btn btn-clear" id="cancelProfileBtn">Отмена</button>
             </div>
         `;
         showModal('Редактирование профиля', formHtml);
         document.getElementById('saveProfileBtn').onclick = () => {
             const newUsername = document.getElementById('profileUsername').value.trim();
-            const newPassword = document.getElementById('profilePassword').value.trim();
-            if (!newUsername) { showMessage('Имя не может быть пустым', true); return; }
-            const user = getUsers().find(u => u.username === currentUser.username);
-            if (!user) { showMessage('Ошибка', true); return; }
-            const finalPassword = newPassword || user.password;
-            if (updateUser(currentUser.username, newUsername, finalPassword, user.role)) {
-                showMessage('Профиль обновлён');
-                currentUser = { username: newUsername, role: user.role };
-                sessionStorage.setItem('instrumentUser', JSON.stringify(currentUser));
-                closeModal();
-                renderApp(); // обновляем интерфейс (имя в правом углу)
+            let newPassword = document.getElementById('profilePassword').value.trim();
+            if (!newUsername) {
+                showMessage('Имя не может быть пустым', true);
+                return;
+            }
+            const users = getUsers();
+            const user = users.find(u => u.username === currentUser.username);
+            if (!user) return;
+            if (newPassword === '') newPassword = user.password;
+            if (updateUser(currentUser.username, newUsername, newPassword, user.role)) {
+                showMessage('Профиль обновлён, выполните вход заново');
+                logout();
             } else {
-                showMessage('Ошибка обновления', true);
+                showMessage('Не удалось обновить (имя уже занято)', true);
             }
         };
-        document.getElementById('cancelProfileBtn').onclick = closeModal;
+        document.getElementById('cancelProfileBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
     }
 
-    // ---------- Вспомогательные функции (уведомления, статусы) ----------
+    // ---------- Вспомогательные функции (уведомления, статусы, работа с Яндекс.Диском) ----------
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
         toast.className = 'toast';
@@ -412,7 +456,6 @@
         return 'status-free';
     }
 
-    // ---------- Работа с Яндекс.Диском (сохранение, загрузка, история) ----------
     async function saveToYandex() {
         try {
             const proxyBase = PROXY_URL.split('?')[0];
@@ -426,7 +469,6 @@
             const { href } = await response.json();
             if (!href) throw new Error("Нет ссылки для загрузки");
 
-            // Подготовка листа "Приборы"
             const headersRow = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
                                 "Дата поверки", "Действительно до", "Ссылка на документ",
                                 "Кто взял", "Куда взял", "Дата выдачи", "Состояние"];
@@ -440,8 +482,7 @@
                 ])
             ];
             const wsInstruments = XLSX.utils.aoa_to_sheet(wsData);
-            
-            // Лист "История"
+
             const historyHeaders = ["ID прибора", "Название", "Кто взял", "Куда взял", "Дата выдачи", "Дата возврата"];
             const historyData = [
                 historyHeaders,
@@ -450,19 +491,19 @@
                 ])
             ];
             const wsHistory = XLSX.utils.aoa_to_sheet(historyData);
-            
-            // Лист "Пользователи"
-            const usersHeaders = ["Имя пользователя", "Пароль", "Роль"];
-            const usersData = [
-                usersHeaders,
-                ...currentUsers.map(u => [u.username, u.password, u.role])
-            ];
-            const wsUsers = XLSX.utils.aoa_to_sheet(usersData);
-            
+
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, wsInstruments, "Приборы");
             XLSX.utils.book_append_sheet(wb, wsHistory, "История");
+            // Добавляем лист пользователей
+            const users = getUsers();
+            const usersSheetData = [["Имя пользователя", "Пароль", "Роль"]];
+            for (const u of users) {
+                usersSheetData.push([u.username, u.password, u.role === 'admin' ? 'admin' : 'employee']);
+            }
+            const wsUsers = XLSX.utils.aoa_to_sheet(usersSheetData);
             XLSX.utils.book_append_sheet(wb, wsUsers, "Пользователи");
+
             const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
             const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
@@ -575,22 +616,7 @@
                             }
                         }
                     }
-                    let users = [];
-                    const sheetUsers = workbook.Sheets["Пользователи"];
-                    if (sheetUsers) {
-                        const rows = XLSX.utils.sheet_to_json(sheetUsers, { header: 1, defval: "" });
-                        if (rows && rows.length > 1) {
-                            for (let i = 1; i < rows.length; i++) {
-                                const row = rows[i];
-                                if (!row || row.length < 3) continue;
-                                const username = row[0] ? String(row[0]).trim() : '';
-                                const password = row[1] ? String(row[1]).trim() : '';
-                                const role = row[2] ? String(row[2]).trim() : 'employee';
-                                if (username && password) users.push({ username, password, role });
-                            }
-                        }
-                    }
-                    resolve({ instruments, history, users });
+                    resolve({ instruments, history });
                 } catch(e) { reject(e); }
             };
             reader.onerror = reject;
@@ -654,7 +680,9 @@
                 renderApp();
                 showMessage(`✅ Прибор "${instrument.name}" удалён!`);
                 const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('id') === instrument.id) window.location.href = window.location.href.split('?')[0];
+                if (urlParams.get('id') === instrument.id) {
+                    window.location.href = window.location.href.split('?')[0];
+                }
             }
         }
     }
@@ -720,12 +748,14 @@
                 condition: "free"
             };
             currentInstruments.push(newInstrument);
-            closeModal();
+            document.getElementById('customModal').style.display = 'none';
             renderApp();
             await saveToYandex();
             showMessage(`✅ Прибор "${newInstrument.name}" добавлен и сохранён!`);
         };
-        document.getElementById('cancelAddBtn').onclick = closeModal;
+        document.getElementById('cancelAddBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
         const typeSelect = document.getElementById('new_type');
         const dateGroup = document.getElementById('new_date_group');
         if (typeSelect && dateGroup) {
@@ -783,54 +813,54 @@
             instrument.taken_by = document.getElementById('edit_taken_by').value;
             instrument.taken_where = document.getElementById('edit_taken_where').value;
             instrument.taken_date = document.getElementById('edit_taken_date').value;
-            closeModal();
+            document.getElementById('customModal').style.display = 'none';
             renderApp();
             await saveToYandex();
             showMessage("✅ Изменения сохранены!");
         };
-        document.getElementById('cancelAllBtn').onclick = closeModal;
+        document.getElementById('cancelAllBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
     }
 
-    // Выдача прибора: имя подставляется автоматически, вводится только "Место использования"
-    function showIssueForm(instrument) {
+    function showEditForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
-            <div class="form-group"><label>Место использования</label><input type="text" id="takenWhere" placeholder="например, Лаборатория 3"></div>
-            <div class="form-group"><label>Дата выдачи</label><input type="date" id="takenDate" value="${today}"></div>
-            <button class="btn btn-edit" id="saveIssueBtn">📝 Выдать прибор</button>
-            <button class="btn btn-clear" id="cancelIssueBtn">Отмена</button>
+            <div class="form-group"><label>Место использования</label><input type="text" id="takenWhere" value="${escapeHtml(instrument.taken_where)}" placeholder="Например: Лаборатория 3"></div>
+            <button class="btn btn-edit" id="saveBtn">✅ Взять прибор</button>
+            <button class="btn btn-clear" id="clearBtn">❌ Очистить</button>
         `;
-        showModal(`Выдача прибора: ${escapeHtml(instrument.name)}`, formHtml);
-        document.getElementById('saveIssueBtn').onclick = async () => {
-            const newTakenWhere = document.getElementById('takenWhere').value.trim();
-            const newTakenDate = document.getElementById('takenDate').value;
+        showModal(`Взять прибор: ${escapeHtml(instrument.name)}`, formHtml);
+        document.getElementById('saveBtn').onclick = async () => {
+            const newTakenWhere = document.getElementById('takenWhere').value;
+            const newTakenBy = currentUser.username;
+            const newTakenDate = new Date().toISOString().slice(0,10);
             if (!newTakenWhere) {
                 showMessage('Укажите место использования', true);
                 return;
             }
-            const newTakenBy = currentUser.username;
             addHistoryEntry(instrument, newTakenBy, newTakenWhere, newTakenDate);
             instrument.taken_by = newTakenBy;
             instrument.taken_where = newTakenWhere;
             instrument.taken_date = newTakenDate;
             instrument.condition = 'busy';
-            closeModal();
+            document.getElementById('customModal').style.display = 'none';
             renderApp();
             await saveToYandex();
-            showMessage(`✅ Прибор выдан сотруднику ${newTakenBy}`);
+            showMessage(`✅ Прибор взят ${newTakenBy}`);
         };
-        document.getElementById('cancelIssueBtn').onclick = closeModal;
-    }
-
-    function returnInstrument(instrument) {
-        const returnDate = new Date().toISOString().slice(0,10);
-        closeHistoryEntry(instrument, returnDate);
-        instrument.taken_by = '';
-        instrument.taken_where = '';
-        instrument.taken_date = '';
-        if (instrument.condition !== 'broken') instrument.condition = 'free';
-        renderApp();
-        saveToYandex().then(() => showMessage('Прибор возвращён!'));
+        document.getElementById('clearBtn').onclick = async () => {
+            const returnDate = new Date().toISOString().slice(0,10);
+            closeHistoryEntry(instrument, returnDate);
+            instrument.taken_by = '';
+            instrument.taken_where = '';
+            instrument.taken_date = '';
+            if (instrument.condition !== 'broken') instrument.condition = 'free';
+            document.getElementById('customModal').style.display = 'none';
+            renderApp();
+            await saveToYandex();
+            showMessage("✅ Прибор возвращён");
+        };
     }
 
     function escapeHtml(str) {
@@ -864,7 +894,7 @@
         }
     };
 
-    // --- Карточка прибора ---
+    // --- Карточка прибора (с учётом роли) ---
     function renderCard(inst) {
         const verifText = getVerificationText(inst.valid_until);
         const verifClass = getVerificationClass(inst.valid_until);
@@ -883,9 +913,16 @@
 
         let issueButton = '';
         if (hasTaken) {
-            issueButton = `<button class="btn btn-clear" onclick="returnInstrument(currentInstrument)">📦 Положить прибор</button>`;
+            issueButton = `<button class="btn btn-clear" onclick="(() => { 
+                const returnDate = new Date().toISOString().slice(0,10);
+                closeHistoryEntry(currentInstrument, returnDate);
+                currentInstrument.taken_by = ''; currentInstrument.taken_where = ''; currentInstrument.taken_date = ''; 
+                if (currentInstrument.condition !== 'broken') currentInstrument.condition = 'free';
+                renderApp(); 
+                saveToYandex().then(() => showMessage('Прибор возвращён!'));
+            })()">📦 Положить прибор</button>`;
         } else {
-            issueButton = `<button class="btn btn-edit" onclick="showIssueForm(currentInstrument)">📝 Взять прибор</button>`;
+            issueButton = `<button class="btn btn-edit" onclick="showEditForm(currentInstrument)">📝 Взять прибор</button>`;
         }
 
         let adminExtraHtml = '';
@@ -1006,9 +1043,9 @@
         const userHtml = `
             <div class="user-info">
                 <div class="user-card">
-                    <span><strong>${escapeHtml(roleText)}</strong></span>
-                    <button class="btn btn-edit" onclick="showProfileForm()">👤 Редактировать профиль</button>
-                    ${hasAccess(['admin']) ? `<button class="btn btn-add-user" onclick="showUserManagement()">👥 Управление сотрудниками</button>` : ''}
+                    <span><strong>${roleText}</strong></span>
+                    ${hasAccess(['admin']) ? `<button class="btn btn-add-user" onclick="showManageUsersForm()">👥 Управление сотрудниками</button>` : ''}
+                    <button class="btn btn-edit" onclick="showEditProfileForm()">✏️ Редактировать профиль</button>
                     <button class="btn btn-logout" onclick="logout()">Выйти</button>
                 </div>
             </div>
@@ -1068,17 +1105,10 @@
     // --- Инициализация ---
     (async () => {
         try {
-            const { instruments, history, users } = await getTableData();
+            await initUsers(); // загружаем пользователей из localStorage/Excel
+            const { instruments, history } = await getTableData();
             currentInstruments = instruments;
             currentHistory = history;
-            if (users && users.length > 0) {
-                currentUsers = users;
-                localStorage.setItem('app_users_backup', JSON.stringify(currentUsers));
-            } else {
-                let saved = localStorage.getItem('app_users_backup');
-                if (saved) currentUsers = JSON.parse(saved);
-                else currentUsers = [{ username: 'admin', password: 'admin', role: 'admin' }];
-            }
             checkSession();
             if (currentUser) {
                 renderApp();
@@ -1098,10 +1128,9 @@
         if (currentInstruments.length === 0 && currentUser) {
             (async () => {
                 try {
-                    const { instruments, history, users } = await getTableData();
+                    const { instruments, history } = await getTableData();
                     currentInstruments = instruments;
                     currentHistory = history;
-                    if (users && users.length) currentUsers = users;
                     renderApp();
                 } catch(e) {
                     document.getElementById('app').innerHTML = `<div class="error">Ошибка загрузки: ${e.message}<br><br>Проверьте прокси и публичный ключ.</div>`;
