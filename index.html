@@ -86,7 +86,8 @@
     let currentInstruments = [];
     let currentHistory = [];
     let searchQuery = "";
-    let statusFilter = "all";
+    let verificationFilter = "all";   // all, поверен, не поверен, без поверки
+    let conditionFilter = "all";      // all, свободен, занят, не исправен
     let currentUser = null;
 
     // --- Управление сессией ---
@@ -119,7 +120,7 @@
         }
     }
 
-    // --- Вспомогательные функции (сохранение, загрузка, история, утилиты) ---
+    // --- Вспомогательные функции ---
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
         toast.className = 'toast';
@@ -559,7 +560,7 @@
         });
     }
 
-    // --- Отображение карточки с учётом роли ---
+    // --- Карточка прибора (без изменений) ---
     function renderCard(inst) {
         const verifText = getVerificationText(inst.valid_until);
         const verifClass = getVerificationClass(inst.valid_until);
@@ -628,17 +629,23 @@
         </div>`;
     }
 
-    // --- Отображение списка приборов с кнопкой "Добавить прибор" для админа ---
+    // --- Список приборов с двойной фильтрацией ---
     function renderListContainer() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
         let filtered = currentInstruments;
+        // Фильтр по поиску
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
         }
-        if (statusFilter !== "all") {
-            filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === statusFilter);
+        // Фильтр по поверке
+        if (verificationFilter !== "all") {
+            filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === verificationFilter);
+        }
+        // Фильтр по состоянию (свободен/занят/не исправен)
+        if (conditionFilter !== "all") {
+            filtered = filtered.filter(inst => getConditionText(inst.condition) === conditionFilter);
         }
         
         let html = '<div class="card"><h1>Оборудование</h1>';
@@ -662,7 +669,7 @@
         return html;
     }
 
-    // --- Рендеринг главной страницы с отдельными карточками для приветствия, поиска и списка ---
+    // --- Главная страница с карточкой пользователя, поиском и двойными фильтрами ---
     function renderApp() {
         if (!currentUser) return;
         const urlParams = new URLSearchParams(window.location.search);
@@ -681,29 +688,36 @@
             return;
         }
         
-        // Главная страница: три отдельных блока
-        // 1. Блок информации о пользователе (в правом верхнем углу)
+        // Блок пользователя (только роль)
+        const roleText = currentUser.role === 'admin' ? 'Администратор' : 'Пользователь';
         const userHtml = `
             <div class="user-info">
                 <div class="user-card">
-                    <span>👋 Вы вошли как: <strong>${currentUser.role === 'admin' ? 'Администратор' : 'Пользователь'}</strong></span>
+                    <span><strong>${roleText}</strong></span>
                     <button class="btn btn-logout" onclick="logout()">Выйти</button>
                 </div>
             </div>
         `;
-        // 2. Карточка поиска и фильтров
+        // Карточка поиска и фильтров
         const searchCardHtml = `
             <div class="card">
                 <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
-                <div class="filter-group" id="filterGroup">
-                    <button class="btn filter-btn ${statusFilter === 'all' ? 'active' : ''}" data-filter="all">Все</button>
-                    <button class="btn filter-btn ${statusFilter === 'поверен' ? 'active' : ''}" data-filter="поверен">Поверен</button>
-                    <button class="btn filter-btn ${statusFilter === 'не поверен' ? 'active' : ''}" data-filter="не поверен">Не поверен</button>
-                    <button class="btn filter-btn ${statusFilter === 'без поверки' ? 'active' : ''}" data-filter="без поверки">Без поверки</button>
+                <div class="filter-group">
+                    <strong>Поверка:</strong>
+                    <button class="btn filter-btn ${verificationFilter === 'all' ? 'active' : ''}" data-filter-verif="all">Все</button>
+                    <button class="btn filter-btn ${verificationFilter === 'поверен' ? 'active' : ''}" data-filter-verif="поверен">Поверен</button>
+                    <button class="btn filter-btn ${verificationFilter === 'не поверен' ? 'active' : ''}" data-filter-verif="не поверен">Не поверен</button>
+                    <button class="btn filter-btn ${verificationFilter === 'без поверки' ? 'active' : ''}" data-filter-verif="без поверки">Без поверки</button>
+                </div>
+                <div class="filter-group">
+                    <strong>Состояние:</strong>
+                    <button class="btn filter-btn ${conditionFilter === 'all' ? 'active' : ''}" data-filter-cond="all">Все</button>
+                    <button class="btn filter-btn ${conditionFilter === 'свободен' ? 'active' : ''}" data-filter-cond="свободен">Свободен</button>
+                    <button class="btn filter-btn ${conditionFilter === 'занят' ? 'active' : ''}" data-filter-cond="занят">Занят</button>
+                    <button class="btn filter-btn ${conditionFilter === 'не исправен' ? 'active' : ''}" data-filter-cond="не исправен">Не исправен</button>
                 </div>
             </div>
         `;
-        // 3. Контейнер для списка оборудования (будет обновляться отдельно)
         const listContainerHtml = `<div id="listContainer"></div>`;
         
         appDiv.innerHTML = userHtml + searchCardHtml + listContainerHtml;
@@ -712,7 +726,7 @@
         const container = document.getElementById('listContainer');
         if (container) container.innerHTML = renderListContainer();
         
-        // Привязываем обработчики поиска и фильтров
+        // Привязываем обработчики поиска
         const searchField = document.getElementById('globalSearchInput');
         if (searchField) {
             searchField.value = searchQuery;
@@ -722,16 +736,32 @@
                 if (listCont) listCont.innerHTML = renderListContainer();
             });
         }
-        const filterButtons = document.querySelectorAll('.filter-btn');
-        filterButtons.forEach(btn => {
-            btn.removeEventListener('click', handleFilterClick);
-            btn.addEventListener('click', handleFilterClick);
+        // Обработчики для фильтров по поверке
+        const verifButtons = document.querySelectorAll('[data-filter-verif]');
+        verifButtons.forEach(btn => {
+            btn.removeEventListener('click', handleVerifFilter);
+            btn.addEventListener('click', handleVerifFilter);
+        });
+        // Обработчики для фильтров по состоянию
+        const condButtons = document.querySelectorAll('[data-filter-cond]');
+        condButtons.forEach(btn => {
+            btn.removeEventListener('click', handleCondFilter);
+            btn.addEventListener('click', handleCondFilter);
         });
     }
     
-    function handleFilterClick(e) {
-        statusFilter = e.currentTarget.getAttribute('data-filter');
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    function handleVerifFilter(e) {
+        verificationFilter = e.currentTarget.getAttribute('data-filter-verif');
+        // Обновляем активные кнопки
+        document.querySelectorAll('[data-filter-verif]').forEach(btn => btn.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        const container = document.getElementById('listContainer');
+        if (container) container.innerHTML = renderListContainer();
+    }
+    
+    function handleCondFilter(e) {
+        conditionFilter = e.currentTarget.getAttribute('data-filter-cond');
+        document.querySelectorAll('[data-filter-cond]').forEach(btn => btn.classList.remove('active'));
         e.currentTarget.classList.add('active');
         const container = document.getElementById('listContainer');
         if (container) container.innerHTML = renderListContainer();
