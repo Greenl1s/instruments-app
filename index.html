@@ -26,12 +26,13 @@
         .btn-clear { background: #64748b; }
         .btn-qr { background: #8b5cf6; }
         .btn-add { background: #2563eb; }
+        .btn-add-user { background: #38bdf8; }
         .btn-delete { background: #ef4444; }
         .btn-small { padding: 8px 16px; font-size: 13px; }
         .btn-status { background: #e2e8f0; color: #1e293b; margin-right: 6px; }
         .btn-status.active { background: #2563eb; color: white; }
         .btn-logout { background: #ef4444; color: white; border: none; }
-        .user-info { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+        .user-info { display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .user-card { background: white; border-radius: 20px; padding: 12px 24px; display: inline-flex; align-items: center; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
@@ -56,7 +57,7 @@
         .filter-select { padding: 8px 12px; border-radius: 12px; border: 1px solid #cbd5e1; background: white; font-size: 14px; cursor: pointer; }
         .login-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 2000; }
         .login-box { background: white; border-radius: 24px; padding: 32px; max-width: 400px; width: 90%; text-align: center; }
-        .login-box select, .login-box button { width: 100%; padding: 12px; margin-top: 15px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; }
+        .login-box input, .login-box select, .login-box button { width: 100%; padding: 12px; margin-top: 15px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; }
         .login-box button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
     </style>
 </head>
@@ -65,10 +66,8 @@
 <div class="login-overlay" id="loginOverlay">
     <div class="login-box">
         <h2>Вход в систему</h2>
-        <select id="roleSelect">
-            <option value="admin">Администратор</option>
-            <option value="user">Пользователь</option>
-        </select>
+        <input type="text" id="loginUsername" placeholder="Имя пользователя">
+        <input type="password" id="loginPassword" placeholder="Пароль">
         <button id="loginBtn">Войти</button>
     </div>
 </div>
@@ -90,7 +89,40 @@
     let conditionFilter = "all";
     let currentUser = null;
 
-    // --- Управление сессией ---
+    // ---------- Управление пользователями (localStorage) ----------
+    function initUsers() {
+        let users = localStorage.getItem('app_users');
+        if (!users) {
+            const defaultUsers = [
+                { username: 'admin', password: 'admin', role: 'admin' }
+            ];
+            localStorage.setItem('app_users', JSON.stringify(defaultUsers));
+        }
+    }
+
+    function getUsers() {
+        return JSON.parse(localStorage.getItem('app_users')) || [];
+    }
+
+    function saveUsers(users) {
+        localStorage.setItem('app_users', JSON.stringify(users));
+    }
+
+    function addUser(username, password, role) {
+        const users = getUsers();
+        if (users.find(u => u.username === username)) return false;
+        users.push({ username, password, role });
+        saveUsers(users);
+        return true;
+    }
+
+    function validateUser(username, password) {
+        const users = getUsers();
+        const user = users.find(u => u.username === username && u.password === password);
+        return user ? { username: user.username, role: user.role } : null;
+    }
+
+    // ---------- Управление сессией ----------
     function hasAccess(allowedRoles) {
         if (!currentUser) return false;
         return allowedRoles.includes(currentUser.role);
@@ -103,11 +135,17 @@
         document.getElementById('app').innerHTML = '';
     }
 
-    function login(role) {
-        currentUser = { role: role };
-        sessionStorage.setItem('instrumentUser', JSON.stringify(currentUser));
-        document.getElementById('loginOverlay').style.display = 'none';
-        renderApp();
+    function login(username, password) {
+        const user = validateUser(username, password);
+        if (user) {
+            currentUser = user;
+            sessionStorage.setItem('instrumentUser', JSON.stringify(currentUser));
+            document.getElementById('loginOverlay').style.display = 'none';
+            renderApp();
+            showMessage(`Добро пожаловать, ${username}!`);
+        } else {
+            showMessage('Неверное имя пользователя или пароль', true);
+        }
     }
 
     function checkSession() {
@@ -120,7 +158,44 @@
         }
     }
 
-    // --- Вспомогательные функции ---
+    // ---------- Форма добавления сотрудника (только для админа) ----------
+    function showAddUserForm() {
+        const formHtml = `
+            <div class="form-group"><label>Имя сотрудника</label><input type="text" id="newUsername" placeholder="ivanov"></div>
+            <div class="form-group"><label>Пароль</label><input type="password" id="newPassword" placeholder="придумайте пароль"></div>
+            <div class="form-group"><label>Права доступа</label>
+                <select id="newRole">
+                    <option value="admin">Администратор (полный доступ)</option>
+                    <option value="employee">Сотрудник (ограниченный доступ)</option>
+                </select>
+            </div>
+            <div class="button-group">
+                <button class="btn btn-add-user" id="confirmAddUserBtn">➕ Добавить сотрудника</button>
+                <button class="btn btn-clear" id="cancelAddUserBtn">Отмена</button>
+            </div>
+        `;
+        showModal('Добавление нового сотрудника', formHtml);
+        document.getElementById('confirmAddUserBtn').onclick = () => {
+            const username = document.getElementById('newUsername').value.trim();
+            const password = document.getElementById('newPassword').value.trim();
+            const role = document.getElementById('newRole').value;
+            if (!username || !password) {
+                showMessage('Заполните имя и пароль', true);
+                return;
+            }
+            if (addUser(username, password, role)) {
+                showMessage(`Сотрудник ${username} добавлен!`);
+                document.getElementById('customModal').style.display = 'none';
+            } else {
+                showMessage('Пользователь с таким именем уже существует', true);
+            }
+        };
+        document.getElementById('cancelAddUserBtn').onclick = () => {
+            document.getElementById('customModal').style.display = 'none';
+        };
+    }
+
+    // ---------- Вспомогательные функции (уведомления, статусы) ----------
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
         toast.className = 'toast';
@@ -152,6 +227,7 @@
         return 'status-free';
     }
 
+    // ---------- Работа с Яндекс.Диском (сохранение, загрузка, история) ----------
     async function saveToYandex() {
         try {
             const proxyBase = PROXY_URL.split('?')[0];
@@ -560,7 +636,6 @@
         });
     }
 
-    // Глобальная функция для копирования информации о приборе
     window.copyInstrumentInfo = () => {
         if (!window.currentInstrument) {
             showMessage("❌ Нет данных для копирования", true);
@@ -582,7 +657,7 @@
         }
     };
 
-    // --- Карточка прибора ---
+    // --- Карточка прибора с учётом прав доступа ---
     function renderCard(inst) {
         const verifText = getVerificationText(inst.valid_until);
         const verifClass = getVerificationClass(inst.valid_until);
@@ -654,7 +729,7 @@
         </div>`;
     }
 
-    // --- Список приборов с кнопкой добавления и селектами фильтров ---
+    // --- Список приборов с кнопкой добавления (только для админа) и фильтрами ---
     function renderListContainer() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
@@ -729,11 +804,12 @@
             return;
         }
         
-        const roleText = currentUser.role === 'admin' ? 'Администратор' : 'Пользователь';
+        const roleText = currentUser.role === 'admin' ? 'Администратор' : currentUser.username;
         const userHtml = `
             <div class="user-info">
                 <div class="user-card">
                     <span><strong>${roleText}</strong></span>
+                    ${hasAccess(['admin']) ? `<button class="btn btn-add-user" onclick="showAddUserForm()">👥 Добавить сотрудника</button>` : ''}
                     <button class="btn btn-logout" onclick="logout()">Выйти</button>
                 </div>
             </div>
@@ -791,6 +867,7 @@
     }
 
     // --- Инициализация ---
+    initUsers();
     (async () => {
         try {
             const { instruments, history } = await getTableData();
@@ -809,9 +886,10 @@
     })();
 
     document.getElementById('loginBtn').addEventListener('click', () => {
-        const role = document.getElementById('roleSelect').value;
-        login(role);
-        if (currentInstruments.length === 0) {
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+        login(username, password);
+        if (currentInstruments.length === 0 && currentUser) {
             (async () => {
                 try {
                     const { instruments, history } = await getTableData();
@@ -823,7 +901,7 @@
                     console.error(e);
                 }
             })();
-        } else {
+        } else if (currentUser) {
             renderApp();
         }
     });
