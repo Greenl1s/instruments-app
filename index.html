@@ -30,7 +30,7 @@
         .btn-small { padding: 8px 16px; font-size: 13px; }
         .btn-status { background: #e2e8f0; color: #1e293b; margin-right: 6px; }
         .btn-status.active { background: #2563eb; color: white; }
-        .btn-logout { background: #64748b; }
+        .btn-logout { background: #ef4444; color: white; border: none; }
         .user-info { display: flex; justify-content: flex-end; margin-bottom: 20px; }
         .user-card { background: white; border-radius: 20px; padding: 12px 24px; display: inline-flex; align-items: center; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 15px; }
@@ -51,9 +51,9 @@
         .qr-container canvas { margin: 10px auto; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px; background: white; }
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1100; }
         .search-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; margin-bottom: 16px; }
-        .filter-group { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-        .filter-btn { background: #e2e8f0; color: #1e293b; }
-        .filter-btn.active { background: #2563eb; color: white; }
+        .filter-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+        .filter-selects { display: flex; gap: 12px; align-items: center; }
+        .filter-select { padding: 8px 12px; border-radius: 12px; border: 1px solid #cbd5e1; background: white; font-size: 14px; cursor: pointer; }
         .login-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 2000; }
         .login-box { background: white; border-radius: 24px; padding: 32px; max-width: 400px; width: 90%; text-align: center; }
         .login-box select, .login-box button { width: 100%; padding: 12px; margin-top: 15px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; }
@@ -560,7 +560,7 @@
         });
     }
 
-    // --- Карточка прибора (без изменений) ---
+    // --- Карточка прибора ---
     function renderCard(inst) {
         const verifText = getVerificationText(inst.valid_until);
         const verifClass = getVerificationClass(inst.valid_until);
@@ -629,12 +629,12 @@
         </div>`;
     }
 
-    // --- Список приборов с двойной фильтрацией ---
+    // --- Список приборов с кнопкой добавления и селектами фильтров ---
     function renderListContainer() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
         let filtered = currentInstruments;
-        // Фильтр по поиску
+        // Поиск
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
@@ -643,15 +643,35 @@
         if (verificationFilter !== "all") {
             filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === verificationFilter);
         }
-        // Фильтр по состоянию (свободен/занят/не исправен)
+        // Фильтр по состоянию
         if (conditionFilter !== "all") {
             filtered = filtered.filter(inst => getConditionText(inst.condition) === conditionFilter);
         }
         
         let html = '<div class="card"><h1>Оборудование</h1>';
+        // Верхняя строка с кнопкой "Добавить прибор" и селектами фильтров
+        html += `<div class="filter-row">`;
         if (hasAccess(['admin'])) {
-            html += `<div class="button-group"><button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button></div>`;
+            html += `<button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button>`;
+        } else {
+            html += `<div></div>`; // пустой отступ для выравнивания
         }
+        html += `<div class="filter-selects">
+                    <select id="verifFilterSelect" class="filter-select">
+                        <option value="all" ${verificationFilter === 'all' ? 'selected' : ''}>Поверка: все</option>
+                        <option value="поверен" ${verificationFilter === 'поверен' ? 'selected' : ''}>Поверен</option>
+                        <option value="не поверен" ${verificationFilter === 'не поверен' ? 'selected' : ''}>Не поверен</option>
+                        <option value="без поверки" ${verificationFilter === 'без поверки' ? 'selected' : ''}>Без поверки</option>
+                    </select>
+                    <select id="condFilterSelect" class="filter-select">
+                        <option value="all" ${conditionFilter === 'all' ? 'selected' : ''}>Состояние: все</option>
+                        <option value="свободен" ${conditionFilter === 'свободен' ? 'selected' : ''}>Свободен</option>
+                        <option value="занят" ${conditionFilter === 'занят' ? 'selected' : ''}>Занят</option>
+                        <option value="не исправен" ${conditionFilter === 'не исправен' ? 'selected' : ''}>Не исправен</option>
+                    </select>
+                </div>`;
+        html += `</div>`;
+        
         for (const inst of filtered) {
             const verifText = getVerificationText(inst.valid_until);
             const verifClass = getVerificationClass(inst.valid_until);
@@ -669,7 +689,7 @@
         return html;
     }
 
-    // --- Главная страница с карточкой пользователя, поиском и двойными фильтрами ---
+    // --- Главная страница ---
     function renderApp() {
         if (!currentUser) return;
         const urlParams = new URLSearchParams(window.location.search);
@@ -698,24 +718,10 @@
                 </div>
             </div>
         `;
-        // Карточка поиска и фильтров
+        // Карточка поиска
         const searchCardHtml = `
             <div class="card">
                 <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
-                <div class="filter-group">
-                    <strong>Поверка:</strong>
-                    <button class="btn filter-btn ${verificationFilter === 'all' ? 'active' : ''}" data-filter-verif="all">Все</button>
-                    <button class="btn filter-btn ${verificationFilter === 'поверен' ? 'active' : ''}" data-filter-verif="поверен">Поверен</button>
-                    <button class="btn filter-btn ${verificationFilter === 'не поверен' ? 'active' : ''}" data-filter-verif="не поверен">Не поверен</button>
-                    <button class="btn filter-btn ${verificationFilter === 'без поверки' ? 'active' : ''}" data-filter-verif="без поверки">Без поверки</button>
-                </div>
-                <div class="filter-group">
-                    <strong>Состояние:</strong>
-                    <button class="btn filter-btn ${conditionFilter === 'all' ? 'active' : ''}" data-filter-cond="all">Все</button>
-                    <button class="btn filter-btn ${conditionFilter === 'свободен' ? 'active' : ''}" data-filter-cond="свободен">Свободен</button>
-                    <button class="btn filter-btn ${conditionFilter === 'занят' ? 'active' : ''}" data-filter-cond="занят">Занят</button>
-                    <button class="btn filter-btn ${conditionFilter === 'не исправен' ? 'active' : ''}" data-filter-cond="не исправен">Не исправен</button>
-                </div>
             </div>
         `;
         const listContainerHtml = `<div id="listContainer"></div>`;
@@ -726,7 +732,7 @@
         const container = document.getElementById('listContainer');
         if (container) container.innerHTML = renderListContainer();
         
-        // Привязываем обработчики поиска
+        // Поиск
         const searchField = document.getElementById('globalSearchInput');
         if (searchField) {
             searchField.value = searchQuery;
@@ -734,37 +740,38 @@
                 searchQuery = e.target.value;
                 const listCont = document.getElementById('listContainer');
                 if (listCont) listCont.innerHTML = renderListContainer();
+                // перепривязываем обработчики селектов (они пересоздаются)
+                attachFilterEvents();
             });
         }
-        // Обработчики для фильтров по поверке
-        const verifButtons = document.querySelectorAll('[data-filter-verif]');
-        verifButtons.forEach(btn => {
-            btn.removeEventListener('click', handleVerifFilter);
-            btn.addEventListener('click', handleVerifFilter);
-        });
-        // Обработчики для фильтров по состоянию
-        const condButtons = document.querySelectorAll('[data-filter-cond]');
-        condButtons.forEach(btn => {
-            btn.removeEventListener('click', handleCondFilter);
-            btn.addEventListener('click', handleCondFilter);
-        });
+        attachFilterEvents();
     }
     
-    function handleVerifFilter(e) {
-        verificationFilter = e.currentTarget.getAttribute('data-filter-verif');
-        // Обновляем активные кнопки
-        document.querySelectorAll('[data-filter-verif]').forEach(btn => btn.classList.remove('active'));
-        e.currentTarget.classList.add('active');
-        const container = document.getElementById('listContainer');
-        if (container) container.innerHTML = renderListContainer();
+    function attachFilterEvents() {
+        const verifSelect = document.getElementById('verifFilterSelect');
+        const condSelect = document.getElementById('condFilterSelect');
+        if (verifSelect) {
+            verifSelect.removeEventListener('change', handleVerifSelectChange);
+            verifSelect.addEventListener('change', handleVerifSelectChange);
+        }
+        if (condSelect) {
+            condSelect.removeEventListener('change', handleCondSelectChange);
+            condSelect.addEventListener('change', handleCondSelectChange);
+        }
     }
     
-    function handleCondFilter(e) {
-        conditionFilter = e.currentTarget.getAttribute('data-filter-cond');
-        document.querySelectorAll('[data-filter-cond]').forEach(btn => btn.classList.remove('active'));
-        e.currentTarget.classList.add('active');
+    function handleVerifSelectChange(e) {
+        verificationFilter = e.target.value;
         const container = document.getElementById('listContainer');
         if (container) container.innerHTML = renderListContainer();
+        attachFilterEvents(); // после перерисовки снова привязать события
+    }
+    
+    function handleCondSelectChange(e) {
+        conditionFilter = e.target.value;
+        const container = document.getElementById('listContainer');
+        if (container) container.innerHTML = renderListContainer();
+        attachFilterEvents();
     }
 
     // --- Инициализация ---
