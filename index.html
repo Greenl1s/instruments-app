@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Учёт приборов</title>
     <style>
-        /* Стили без изменений (те же, что были) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; padding: 20px; }
         .container { max-width: 700px; margin: 0 auto; }
@@ -91,30 +90,7 @@
     let verificationFilter = "all";
     let conditionFilter = "all";
     let currentUser = null;
-    let usersCache = [];
-
-    // ---------- Новая функция для поиска первого свободного ID ----------
-    function getNextAvailableId() {
-        // Получаем все числовые ID из currentInstruments
-        const ids = currentInstruments
-            .map(inst => parseInt(inst.id, 10))
-            .filter(num => !isNaN(num) && num > 0);
-        
-        if (ids.length === 0) return 1; // Если приборов нет, начинаем с 1
-        
-        ids.sort((a, b) => a - b); // Сортируем по возрастанию
-        
-        let expected = 1;
-        for (const id of ids) {
-            if (id === expected) {
-                expected++; // этот ID занят, идём дальше
-            } else if (id > expected) {
-                break; // нашли пропуск
-            }
-        }
-        return expected;
-    }
-    // ----------------------------------------------------------------
+    let usersCache = []; // кэш пользователей
 
     // ---------- Работа с пользователями (синхронизация с Excel) ----------
     async function loadUsersFromExcel() {
@@ -735,8 +711,12 @@
     }
 
     function showAddForm() {
-        // Используем новую функцию для поиска первого свободного ID
-        const nextId = getNextAvailableId();
+        let maxId = 0;
+        for (const inst of currentInstruments) {
+            const num = parseInt(inst.id, 10);
+            if (!isNaN(num) && num > maxId) maxId = num;
+        }
+        const nextId = maxId + 1;
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
             <div class="form-group"><label>Название прибора</label><input type="text" id="new_name" placeholder="Например: Мультиметр"></div>
