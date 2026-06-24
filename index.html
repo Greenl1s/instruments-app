@@ -61,6 +61,15 @@
         .login-box button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
         .user-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e2e8f0; }
         .user-list-item:last-child { border-bottom: none; }
+
+        /* Стили для календаря */
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+        .calendar-grid .day { padding: 8px; border-radius: 6px; cursor: default; font-size: 14px; }
+        .calendar-grid .day.header { font-weight: bold; background: #f1f5f9; }
+        .calendar-grid .day.has-event { background: #dcfce7; color: #15803d; font-weight: bold; border: 1px solid #86efac; }
+        .calendar-grid .day.other-month { color: #94a3b8; }
+        .calendar-grid .day.today { background: #e2e8f0; }
     </style>
 </head>
 <body>
@@ -439,6 +448,86 @@
         document.getElementById('cancelProfileBtn').onclick = closeModal;
     }
 
+    // ---------- Календарь поверок ----------
+    function showCalendarModal() {
+        const currentDate = new Date();
+        let year = currentDate.getFullYear();
+        let month = currentDate.getMonth();
+
+        function renderCalendar(y, m) {
+            const firstDay = new Date(y, m, 1).getDay(); // 0=воскресенье
+            const daysInMonth = new Date(y, m + 1, 0).getDate();
+            const today = new Date();
+            
+            // Получаем даты поверок из приборов
+            const verificationDates = currentInstruments
+                .map(inst => inst.verification_date)
+                .filter(d => d && d.length === 10) // формат ГГГГ-ММ-ДД
+                .map(d => new Date(d + 'T00:00:00'));
+            
+            // Создаём Set для быстрой проверки
+            const dateSet = new Set(verificationDates.map(d => d.toDateString()));
+
+            let html = `<div class="calendar-header">
+                <button class="btn btn-small" onclick="changeMonth(-1)">◀</button>
+                <span style="font-weight: bold; font-size:18px;">${new Date(y, m).toLocaleString('ru', { month: 'long', year: 'numeric' })}</span>
+                <button class="btn btn-small" onclick="changeMonth(1)">▶</button>
+            </div>
+            <div class="calendar-grid">`;
+            const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+            for (let d of weekdays) {
+                html += `<div class="day header">${d}</div>`;
+            }
+            // Смещение: первый день может быть воскресенье (0) => индекс понедельника = 1
+            let startOffset = (firstDay === 0) ? 6 : firstDay - 1;
+            for (let i = 0; i < startOffset; i++) {
+                html += `<div class="day other-month"></div>`;
+            }
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateObj = new Date(y, m, day);
+                const dateStr = dateObj.toDateString();
+                const isToday = dateObj.toDateString() === today.toDateString();
+                const hasEvent = dateSet.has(dateStr);
+                let classes = 'day';
+                if (isToday) classes += ' today';
+                if (hasEvent) classes += ' has-event';
+                html += `<div class="${classes}">${day}</div>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        function openCalendar() {
+            const content = `
+                <div id="calendarContainer">
+                    ${renderCalendar(year, month)}
+                </div>
+                <div class="button-group"><button class="btn btn-clear" onclick="closeModal()">Закрыть</button></div>
+            `;
+            showModal('📅 Календарь поверок', content);
+            // Сохраняем текущие год и месяц для переключения
+            window._calendarYear = year;
+            window._calendarMonth = month;
+            window._calendarUpdate = () => {
+                const container = document.getElementById('calendarContainer');
+                if (container) {
+                    container.innerHTML = renderCalendar(window._calendarYear, window._calendarMonth);
+                }
+            };
+            window.changeMonth = (delta) => {
+                let newMonth = window._calendarMonth + delta;
+                let newYear = window._calendarYear;
+                if (newMonth < 0) { newMonth = 11; newYear--; }
+                if (newMonth > 11) { newMonth = 0; newYear++; }
+                window._calendarMonth = newMonth;
+                window._calendarYear = newYear;
+                if (window._calendarUpdate) window._calendarUpdate();
+            };
+        }
+
+        openCalendar();
+    }
+
     // ---------- Вспомогательные функции (уведомления, статусы, работа с Яндекс.Диском) ----------
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
@@ -720,7 +809,7 @@
         saveToYandex().then(() => showMessage(`Статус изменён на "${getConditionText(condition)}"`));
     }
 
-    // ---------- Добавление нового прибора (с использованием getNextAvailableId) ----------
+    // ---------- Добавление нового прибора ----------
     function showAddForm() {
         const nextId = getNextAvailableId();
         const today = new Date().toISOString().slice(0,10);
@@ -830,7 +919,7 @@
         document.getElementById('cancelAllBtn').onclick = closeModal;
     }
 
-    // ---------- Выдача прибора (исправлена) ----------
+    // ---------- Выдача прибора ----------
     function showIssueForm(instrument) {
         if (!currentUser) {
             showMessage('Ошибка: вы не авторизованы', true);
@@ -858,8 +947,8 @@
             instrument.taken_date = newTakenDate;
             instrument.condition = 'busy';
             closeModal();
-            renderApp();
             await saveToYandex();
+            renderApp();
             showMessage(`✅ Прибор выдан сотруднику ${newTakenBy}`);
         };
         document.getElementById('cancelIssueBtn').onclick = closeModal;
@@ -970,14 +1059,19 @@
         </div>`;
     }
 
-    // --- Список приборов ---
+    // --- Список приборов (с умным поиском) ---
     function renderListContainer() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
         let filtered = currentInstruments;
+        // Умный поиск: по имени, серийному номеру, модели
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
-            filtered = filtered.filter(inst => inst.name.toLowerCase().includes(query));
+            filtered = filtered.filter(inst => 
+                inst.name.toLowerCase().includes(query) ||
+                inst.serial_number.toLowerCase().includes(query) ||
+                inst.model.toLowerCase().includes(query)
+            );
         }
         if (verificationFilter !== "all") {
             filtered = filtered.filter(inst => getVerificationText(inst.valid_until) === verificationFilter);
@@ -1058,7 +1152,10 @@
         `;
         const searchCardHtml = `
             <div class="card">
-                <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Поиск по названию...">
+                <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Умный поиск (название, серийный номер, модель)...">
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn btn-edit" onclick="showCalendarModal()">📅 Календарь поверок</button>
+                </div>
             </div>
         `;
         const listContainerHtml = `<div id="listContainer"></div>`;
