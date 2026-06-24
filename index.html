@@ -90,7 +90,28 @@
     let verificationFilter = "all";
     let conditionFilter = "all";
     let currentUser = null;
-    let usersCache = []; // кэш пользователей
+    let usersCache = [];
+
+    // ---------- Функция поиска первого свободного ID ----------
+    function getNextAvailableId() {
+        const ids = currentInstruments
+            .map(inst => parseInt(inst.id, 10))
+            .filter(num => !isNaN(num) && num > 0);
+        if (ids.length === 0) return 1;
+        ids.sort((a, b) => a - b);
+        let expected = 1;
+        for (const id of ids) {
+            if (id === expected) expected++;
+            else if (id > expected) break;
+        }
+        return expected;
+    }
+
+    // ---------- Закрытие модального окна ----------
+    function closeModal() {
+        const modal = document.getElementById('customModal');
+        if (modal) modal.style.display = 'none';
+    }
 
     // ---------- Работа с пользователями (синхронизация с Excel) ----------
     async function loadUsersFromExcel() {
@@ -127,7 +148,6 @@
 
     async function saveUsersToExcel(users) {
         try {
-            // 1. Получить текущий файл
             const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
             const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
             const response = await fetch(proxiedApiUrl);
@@ -139,7 +159,6 @@
             const blob = await fileResponse.blob();
             const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
             
-            // 2. Обновить лист "Пользователи"
             const sheetData = [["Имя пользователя", "Пароль", "Роль"]];
             for (const u of users) {
                 sheetData.push([u.username, u.password, u.role === 'admin' ? 'admin' : 'employee']);
@@ -148,7 +167,6 @@
             workbook.Sheets["Пользователи"] = ws;
             if (!workbook.SheetNames.includes("Пользователи")) workbook.SheetNames.push("Пользователи");
             
-            // 3. Сохранить обратно на Диск
             const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
             const blobOut = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             
@@ -198,7 +216,7 @@
     function saveUsersLocally(users) {
         usersCache = users;
         localStorage.setItem('app_users', JSON.stringify(users));
-        saveUsersToExcel(users); // синхронизация с Excel
+        saveUsersToExcel(users);
     }
 
     function addUser(username, password, role) {
@@ -296,14 +314,12 @@
             }
             if (addUser(username, password, role)) {
                 showMessage(`Сотрудник ${username} добавлен!`);
-                document.getElementById('customModal').style.display = 'none';
+                closeModal();
             } else {
                 showMessage('Пользователь с таким именем уже существует', true);
             }
         };
-        document.getElementById('cancelAddUserBtn').onclick = () => {
-            document.getElementById('customModal').style.display = 'none';
-        };
+        document.getElementById('cancelAddUserBtn').onclick = closeModal;
     }
 
     function showManageUsersForm() {
@@ -328,9 +344,7 @@
             </div>
         `;
         showModal('Управление сотрудниками', formHtml);
-        document.getElementById('closeUsersBtn').onclick = () => {
-            document.getElementById('customModal').style.display = 'none';
-        };
+        document.getElementById('closeUsersBtn').onclick = closeModal;
     }
 
     window.editUser = (oldUsername) => {
@@ -363,7 +377,7 @@
             if (newPassword === '') newPassword = user.password;
             if (updateUser(oldUsername, newUsername, newPassword, newRole)) {
                 showMessage(`Пользователь ${oldUsername} обновлён`);
-                document.getElementById('customModal').style.display = 'none';
+                closeModal();
                 if (currentUser.username === oldUsername) {
                     currentUser.username = newUsername;
                     currentUser.role = newRole;
@@ -374,9 +388,7 @@
                 showMessage('Не удалось обновить (возможно, имя уже занято)', true);
             }
         };
-        document.getElementById('cancelEditBtn').onclick = () => {
-            document.getElementById('customModal').style.display = 'none';
-        };
+        document.getElementById('cancelEditBtn').onclick = closeModal;
     };
 
     window.deleteUserAccount = (username) => {
@@ -386,7 +398,7 @@
                 if (currentUser.username === username) {
                     logout();
                 } else {
-                    document.getElementById('customModal').style.display = 'none';
+                    closeModal();
                     renderApp();
                 }
             } else {
@@ -424,9 +436,7 @@
                 showMessage('Не удалось обновить (имя уже занято)', true);
             }
         };
-        document.getElementById('cancelProfileBtn').onclick = () => {
-            document.getElementById('customModal').style.display = 'none';
-        };
+        document.getElementById('cancelProfileBtn').onclick = closeModal;
     }
 
     // ---------- Вспомогательные функции (уведомления, статусы, работа с Яндекс.Диском) ----------
@@ -649,7 +659,7 @@
             modal.className = 'modal';
             modal.innerHTML = `<div class="modal-content"><h3 id="modalTitle"></h3><div id="modalBody"></div><button class="btn btn-small" id="modalCloseBtn">Закрыть</button></div>`;
             document.body.appendChild(modal);
-            document.getElementById('modalCloseBtn').onclick = () => modal.style.display = 'none';
+            document.getElementById('modalCloseBtn').onclick = closeModal;
         }
         document.getElementById('modalTitle').innerText = title;
         document.getElementById('modalBody').innerHTML = content;
@@ -710,13 +720,9 @@
         saveToYandex().then(() => showMessage(`Статус изменён на "${getConditionText(condition)}"`));
     }
 
+    // ---------- Добавление нового прибора (с использованием getNextAvailableId) ----------
     function showAddForm() {
-        let maxId = 0;
-        for (const inst of currentInstruments) {
-            const num = parseInt(inst.id, 10);
-            if (!isNaN(num) && num > maxId) maxId = num;
-        }
-        const nextId = maxId + 1;
+        const nextId = getNextAvailableId();
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
             <div class="form-group"><label>Название прибора</label><input type="text" id="new_name" placeholder="Например: Мультиметр"></div>
@@ -753,27 +759,25 @@
                 condition: "free"
             };
             currentInstruments.push(newInstrument);
-            document.getElementById('customModal').style.display = 'none';
+            closeModal();
             renderApp();
             await saveToYandex();
             showMessage(`✅ Прибор "${newInstrument.name}" добавлен и сохранён!`);
         };
-        document.getElementById('cancelAddBtn').onclick = () => {
-            document.getElementById('customModal').style.display = 'none';
-        };
+        document.getElementById('cancelAddBtn').onclick = closeModal;
         const typeSelect = document.getElementById('new_type');
         const dateGroup = document.getElementById('new_date_group');
         if (typeSelect && dateGroup) {
             const updateLabel = () => {
                 const label = dateGroup.querySelector('label');
-                if (typeSelect.value === 'Поверка') label.innerText = 'Дата поверки';
-                else label.innerText = 'Дата калибровки';
+                label.innerText = typeSelect.value === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
             };
             typeSelect.addEventListener('change', updateLabel);
             updateLabel();
         }
     }
 
+    // ---------- Редактирование прибора ----------
     function showEditAllForm(instrument) {
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
@@ -818,17 +822,20 @@
             instrument.taken_by = document.getElementById('edit_taken_by').value;
             instrument.taken_where = document.getElementById('edit_taken_where').value;
             instrument.taken_date = document.getElementById('edit_taken_date').value;
-            document.getElementById('customModal').style.display = 'none';
+            closeModal();
             renderApp();
             await saveToYandex();
             showMessage("✅ Изменения сохранены!");
         };
-        document.getElementById('cancelAllBtn').onclick = () => {
-            document.getElementById('customModal').style.display = 'none';
-        };
+        document.getElementById('cancelAllBtn').onclick = closeModal;
     }
 
+    // ---------- Выдача прибора (исправлена) ----------
     function showIssueForm(instrument) {
+        if (!currentUser) {
+            showMessage('Ошибка: вы не авторизованы', true);
+            return;
+        }
         const today = new Date().toISOString().slice(0,10);
         const formHtml = `
             <div class="form-group"><label>Место использования</label><input type="text" id="takenWhere" placeholder="например, Лаборатория 3"></div>
