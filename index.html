@@ -32,6 +32,7 @@
         .btn-status { background: #e2e8f0; color: #1e293b; margin-right: 6px; }
         .btn-status.active { background: #2563eb; color: white; }
         .btn-logout { background: #ef4444; color: white; border: none; }
+        .btn-return-disabled { background: #94a3b8; color: white; cursor: not-allowed; }
         .user-info { display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .user-card { background: white; border-radius: 20px; padding: 12px 24px; display: inline-flex; align-items: center; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 15px; }
@@ -134,7 +135,6 @@
     }
 
     // ---------- Работа с пользователями (синхронизация с Excel) ----------
-    // (все функции без изменений – они те же, что и в предыдущей версии)
     async function loadUsersFromExcel() {
         try {
             const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
@@ -594,11 +594,11 @@
             ];
             const wsInstruments = XLSX.utils.aoa_to_sheet(wsData);
 
-            const historyHeaders = ["ID прибора", "Название", "Кто взял", "Место использования", "Дата выдачи", "Дата возврата"];
+            const historyHeaders = ["ID прибора", "Название", "Кто взял", "Место использования", "Дата выдачи", "Кто вернул", "Дата возврата"];
             const historyData = [
                 historyHeaders,
                 ...currentHistory.map(rec => [
-                    rec.id, rec.name, rec.takenBy, rec.takenWhere, rec.issuedDate, rec.returnDate || ""
+                    rec.id, rec.name, rec.takenBy, rec.takenWhere, rec.issuedDate, rec.returnedBy || "", rec.returnDate || ""
                 ])
             ];
             const wsHistory = XLSX.utils.aoa_to_sheet(historyData);
@@ -630,6 +630,7 @@
         }
     }
 
+    // ---------- История: добавление записи о выдаче ----------
     function addHistoryEntry(instrument, takenBy, takenWhere, issuedDate) {
         currentHistory.push({
             id: instrument.id,
@@ -637,28 +638,34 @@
             takenBy: takenBy,
             takenWhere: takenWhere,
             issuedDate: issuedDate,
+            returnedBy: null,
             returnDate: null
         });
     }
 
-    function closeHistoryEntry(instrument, returnDate) {
+    // ---------- История: закрытие записи о возврате (с указанием, кто вернул) ----------
+    function closeHistoryEntry(instrument, returnDate, returnedBy) {
         for (let i = currentHistory.length - 1; i >= 0; i--) {
             if (currentHistory[i].id === instrument.id && !currentHistory[i].returnDate) {
                 currentHistory[i].returnDate = returnDate;
+                currentHistory[i].returnedBy = returnedBy;
                 return true;
             }
         }
+        // Если не нашли открытую запись (например, прибор был возвращён без истории), создаём новую
         currentHistory.push({
             id: instrument.id,
             name: instrument.name,
             takenBy: "?",
             takenWhere: "?",
             issuedDate: "?",
+            returnedBy: returnedBy,
             returnDate: returnDate
         });
         return false;
     }
 
+    // ---------- Загрузка данных (с поддержкой нового столбца) ----------
     async function getTableData() {
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
@@ -714,14 +721,15 @@
                         if (rows && rows.length > 1) {
                             for (let i = 1; i < rows.length; i++) {
                                 const row = rows[i];
-                                if (!row || row.length < 6) continue;
+                                if (!row || row.length < 7) continue;
                                 history.push({
                                     id: String(row[0] || ''),
                                     name: row[1] || '',
                                     takenBy: row[2] || '',
                                     takenWhere: row[3] || '',
                                     issuedDate: row[4] || '',
-                                    returnDate: row[5] || null
+                                    returnedBy: row[5] || null,
+                                    returnDate: row[6] || null
                                 });
                             }
                         }
@@ -854,7 +862,6 @@
                 condition: "free"
             };
             currentInstruments.push(newInstrument);
-            // Сортируем по ID после добавления
             sortInstrumentsById();
             closeModal();
             renderApp();
@@ -919,7 +926,6 @@
             instrument.taken_by = document.getElementById('edit_taken_by').value;
             instrument.taken_where = document.getElementById('edit_taken_where').value;
             instrument.taken_date = document.getElementById('edit_taken_date').value;
-            // Сортируем после редактирования (на случай, если ID изменился)
             sortInstrumentsById();
             closeModal();
             renderApp();
@@ -964,15 +970,50 @@
         document.getElementById('cancelIssueBtn').onclick = closeModal;
     }
 
+    // ---------- Возврат прибора (с проверкой прав) ----------
     function returnInstrument(instrument) {
+        if (!currentUser) {
+            showMessage('Ошибка: вы не авторизованы', true);
+            return;
+        }
+
+        // Проверяем, кто взял прибор
+        const takenBy = instrument.taken_by;
+        const isAdmin = currentUser.role === 'admin';
+
+        // Если прибор не взят – возвращать нечего
+        if (!takenBy || takenBy.trim() === '') {
+            showMessage('Прибор уже на месте', true);
+            return;
+        }
+
+        // Логика проверки прав:
+        // 1. Если администратор – можно вернуть любой прибор
+        // 2. Если обычный пользователь – можно вернуть только свой
+        if (!isAdmin && takenBy !== currentUser.username) {
+            showMessage(`❌ Вы не можете вернуть этот прибор. Его взял(а) ${takenBy}`, true);
+            return;
+        }
+
         const returnDate = new Date().toISOString().slice(0,10);
-        closeHistoryEntry(instrument, returnDate);
+        const returnedBy = isAdmin ? currentUser.username : takenBy; // если админ, пишем его имя, иначе имя того, кто взял
+
+        // Закрываем запись в истории
+        closeHistoryEntry(instrument, returnDate, returnedBy);
+
+        // Очищаем поля выдачи
         instrument.taken_by = '';
         instrument.taken_where = '';
         instrument.taken_date = '';
-        if (instrument.condition !== 'broken') instrument.condition = 'free';
+        if (instrument.condition !== 'broken') {
+            instrument.condition = 'free';
+        }
+
         renderApp();
-        saveToYandex().then(() => showMessage('Прибор возвращён!'));
+        saveToYandex().then(() => {
+            const msg = isAdmin ? `✅ Прибор возвращён администратором ${currentUser.username}` : '✅ Прибор возвращён';
+            showMessage(msg);
+        });
     }
 
     function escapeHtml(str) {
@@ -1023,10 +1064,22 @@
         const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">📄 Открыть документ</a>` : '—';
         const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
 
+        // Логика кнопки "Положить прибор"
         let issueButton = '';
         if (hasTaken) {
-            issueButton = `<button class="btn btn-clear" onclick="returnInstrument(currentInstrument)">📦 Положить прибор</button>`;
+            const isAdmin = currentUser && currentUser.role === 'admin';
+            const isOwner = currentUser && inst.taken_by === currentUser.username;
+            // Показываем кнопку, если:
+            // - пользователь администратор
+            // - или пользователь является тем, кто взял прибор
+            if (isAdmin || isOwner) {
+                issueButton = `<button class="btn btn-clear" onclick="returnInstrument(currentInstrument)">📦 Положить прибор</button>`;
+            } else {
+                // Если прибор взят другим пользователем, показываем серую кнопку-заглушку
+                issueButton = `<button class="btn btn-return-disabled" disabled title="Этот прибор взял(а) ${escapeHtml(inst.taken_by)}">📦 Положить прибор</button>`;
+            }
         } else {
+            // Если прибор свободен, показываем кнопку "Взять прибор" (для всех)
             issueButton = `<button class="btn btn-edit" onclick="showIssueForm(currentInstrument)">📝 Взять прибор</button>`;
         }
 
@@ -1073,11 +1126,9 @@
     function renderListContainer() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
-        // Сортируем перед фильтрацией
         sortInstrumentsById();
         
         let filtered = currentInstruments;
-        // Умный поиск: по имени, серийному номеру, модели
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(inst => 
@@ -1225,7 +1276,6 @@
             const { instruments, history } = await getTableData();
             currentInstruments = instruments;
             currentHistory = history;
-            // Сортируем при загрузке
             sortInstrumentsById();
             checkSession();
             if (currentUser) {
