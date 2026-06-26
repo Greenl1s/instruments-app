@@ -33,7 +33,6 @@
         .btn-status.active { background: #2563eb; color: white; }
         .btn-logout { background: #ef4444; color: white; border: none; }
         .btn-return-disabled { background: #94a3b8; color: white; cursor: not-allowed; }
-        .btn-transfer { background: #8b5cf6; color: white; }
         .user-info { display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .user-card { background: white; border-radius: 20px; padding: 12px 24px; display: inline-flex; align-items: center; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 15px; }
@@ -326,7 +325,6 @@
             </div>
             <div class="button-group">
                 <button class="btn btn-add-user" id="confirmAddUserBtn">Добавить сотрудника</button>
-                <button class="btn btn-clear" id="cancelAddUserBtn">Отмена</button>
             </div>
         `;
         showModal('Добавление нового сотрудника', formHtml);
@@ -345,7 +343,6 @@
                 showMessage('Пользователь с таким именем уже существует', true);
             }
         };
-        document.getElementById('cancelAddUserBtn').onclick = closeModal;
     }
 
     function showManageUsersForm() {
@@ -366,11 +363,9 @@
             <div id="usersList">${rowsHtml}</div>
             <div class="button-group">
                 <button class="btn btn-add-user" onclick="showAddUserForm()">Добавить сотрудника</button>
-                <button class="btn btn-clear" id="closeUsersBtn">Закрыть</button>
             </div>
         `;
         showModal('Управление сотрудниками', formHtml);
-        document.getElementById('closeUsersBtn').onclick = closeModal;
     }
 
     window.editUser = (oldUsername) => {
@@ -388,7 +383,6 @@
             </div>
             <div class="button-group">
                 <button class="btn btn-edit" id="saveEditBtn">Сохранить</button>
-                <button class="btn btn-clear" id="cancelEditBtn">Отмена</button>
             </div>
         `;
         showModal(`Редактирование пользователя ${oldUsername}`, formHtml);
@@ -414,7 +408,6 @@
                 showMessage('Не удалось обновить (возможно, имя уже занято)', true);
             }
         };
-        document.getElementById('cancelEditBtn').onclick = closeModal;
     };
 
     window.deleteUserAccount = (username) => {
@@ -440,7 +433,6 @@
             <div class="form-group"><label>Новый пароль</label><input type="password" id="profilePassword" placeholder="Оставьте пустым, чтобы не менять"></div>
             <div class="button-group">
                 <button class="btn btn-edit" id="saveProfileBtn">Сохранить изменения</button>
-                <button class="btn btn-clear" id="cancelProfileBtn">Отмена</button>
             </div>
         `;
         showModal('Редактирование профиля', formHtml);
@@ -462,7 +454,6 @@
                 showMessage('Не удалось обновить (имя уже занято)', true);
             }
         };
-        document.getElementById('cancelProfileBtn').onclick = closeModal;
     }
 
     // ---------- Календарь поверок ----------
@@ -558,94 +549,6 @@
         }
         const content = html + `<div class="button-group"><button class="btn btn-clear" onclick="closeModal()">Закрыть</button></div>`;
         showModal('Выведены из эксплуатации', content);
-    }
-
-    // ---------- Возврат из списания (для администратора) ----------
-    function unretireInstrument(instrument) {
-        if (!hasAccess(['admin'])) {
-            showMessage('Только администратор может вернуть прибор из списания', true);
-            return;
-        }
-        if (instrument.condition !== 'broken') {
-            showMessage('Этот прибор не списан', true);
-            return;
-        }
-        if (confirm(`Вернуть прибор "${instrument.name}" (ID ${instrument.id}) из списания?`)) {
-            instrument.condition = 'free';
-            renderApp();
-            saveToYandex().then(() => showMessage(`Прибор "${instrument.name}" возвращён из списания`));
-        }
-    }
-
-    // ---------- Передача прибора другому пользователю ----------
-    function showTransferForm(instrument) {
-        if (!currentUser) {
-            showMessage('Ошибка: вы не авторизованы', true);
-            return;
-        }
-        const takenBy = instrument.taken_by;
-        const isAdmin = currentUser.role === 'admin';
-        if (!isAdmin && takenBy !== currentUser.username) {
-            showMessage('Вы не можете передать этот прибор, так как он взят другим сотрудником', true);
-            return;
-        }
-        if (!takenBy || takenBy.trim() === '') {
-            showMessage('Прибор не взят, передавать некому', true);
-            return;
-        }
-
-        const users = getUsers();
-        // Список пользователей, кроме текущего (или если админ, то все кроме себя)
-        const availableUsers = users.filter(u => u.username !== currentUser.username);
-        if (availableUsers.length === 0) {
-            showMessage('Нет других пользователей для передачи', true);
-            return;
-        }
-
-        let optionsHtml = '';
-        for (const u of availableUsers) {
-            optionsHtml += `<option value="${escapeHtml(u.username)}">${escapeHtml(u.username)}</option>`;
-        }
-
-        const formHtml = `
-            <div class="form-group"><label>Выберите сотрудника, которому передать прибор</label>
-                <select id="transferUser">${optionsHtml}</select>
-            </div>
-            <div class="button-group">
-                <button class="btn btn-transfer" id="confirmTransferBtn">Передать прибор</button>
-                <button class="btn btn-clear" id="cancelTransferBtn">Отмена</button>
-            </div>
-        `;
-        showModal(`Передача прибора: ${escapeHtml(instrument.name)}`, formHtml);
-        document.getElementById('confirmTransferBtn').onclick = async () => {
-            const newOwner = document.getElementById('transferUser').value;
-            if (!newOwner) {
-                showMessage('Выберите сотрудника', true);
-                return;
-            }
-            // Выполняем передачу: возврат текущим пользователем и выдача новому
-            const returnDate = new Date().toISOString().slice(0,10);
-            const issuedDate = new Date().toISOString().slice(0,10);
-            const returner = currentUser.username;
-
-            // Закрываем текущую выдачу (возврат)
-            closeHistoryEntry(instrument, returnDate, returner);
-
-            // Создаём новую выдачу для нового пользователя
-            // Место использования оставляем то же, что было
-            const newTakenWhere = instrument.taken_where || '';
-            addHistoryEntry(instrument, newOwner, newTakenWhere, issuedDate);
-            instrument.taken_by = newOwner;
-            instrument.taken_where = newTakenWhere;
-            instrument.taken_date = issuedDate;
-            instrument.condition = 'busy';
-
-            closeModal();
-            await saveToYandex();
-            renderApp();
-            showMessage(`Прибор передан сотруднику ${newOwner}`);
-        };
-        document.getElementById('cancelTransferBtn').onclick = closeModal;
     }
 
     // ---------- Вспомогательные функции (уведомления, статусы, работа с Яндекс.Диском) ----------
@@ -972,7 +875,6 @@
             <div class="form-group"><label>Ссылка на документ</label><input type="text" id="new_doc" placeholder="https://..."></div>
             <div class="button-group">
                 <button class="btn btn-add" id="confirmAddBtn">Добавить прибор</button>
-                <button class="btn btn-clear" id="cancelAddBtn">Отмена</button>
             </div>
         `;
         showModal(`Добавление нового прибора (ID будет ${nextId})`, formHtml);
@@ -998,7 +900,6 @@
             await saveToYandex();
             showMessage(`Прибор "${newInstrument.name}" добавлен и сохранён!`);
         };
-        document.getElementById('cancelAddBtn').onclick = closeModal;
         const typeSelect = document.getElementById('new_type');
         const dateGroup = document.getElementById('new_date_group');
         if (typeSelect && dateGroup) {
@@ -1031,7 +932,6 @@
             <div class="form-group"><label>Место использования</label><input type="text" id="edit_taken_where" value="${escapeHtml(instrument.taken_where)}"></div>
             <div class="form-group"><label>Дата выдачи</label><input type="date" id="edit_taken_date" value="${instrument.taken_date || ''}"></div>
             <button class="btn btn-edit" id="saveAllBtn">Сохранить изменения</button>
-            <button class="btn btn-clear" id="cancelAllBtn">Отмена</button>
         `;
         showModal(`Редактирование #${instrument.id}`, formHtml);
         const typeSelect = document.getElementById('edit_type');
@@ -1062,7 +962,6 @@
             await saveToYandex();
             showMessage("Изменения сохранены!");
         };
-        document.getElementById('cancelAllBtn').onclick = closeModal;
     }
 
     // ---------- Выдача прибора ----------
@@ -1076,7 +975,6 @@
             <div class="form-group"><label>Место использования</label><input type="text" id="takenWhere" placeholder="например, Лаборатория 3"></div>
             <div class="form-group"><label>Дата выдачи</label><input type="date" id="takenDate" value="${today}"></div>
             <button class="btn btn-edit" id="saveIssueBtn">Выдать прибор</button>
-            <button class="btn btn-clear" id="cancelIssueBtn">Отмена</button>
         `;
         showModal(`Выдача прибора: ${escapeHtml(instrument.name)}`, formHtml);
         document.getElementById('saveIssueBtn').onclick = async () => {
@@ -1097,7 +995,6 @@
             renderApp();
             showMessage(`Прибор выдан сотруднику ${newTakenBy}`);
         };
-        document.getElementById('cancelIssueBtn').onclick = closeModal;
     }
 
     // ---------- Возврат прибора (с проверкой прав) ----------
@@ -1137,6 +1034,67 @@
             const msg = isAdmin ? `Прибор возвращён администратором ${currentUser.username}` : 'Прибор возвращён';
             showMessage(msg);
         });
+    }
+
+    // ---------- Передача прибора другому пользователю ----------
+    function showTransferForm(instrument) {
+        if (!currentUser) {
+            showMessage('Ошибка: вы не авторизованы', true);
+            return;
+        }
+        // Проверяем, что прибор взят текущим пользователем (или администратором)
+        const isAdmin = currentUser.role === 'admin';
+        const takenBy = instrument.taken_by;
+        if (!takenBy || takenBy.trim() === '') {
+            showMessage('Прибор не взят, передача невозможна', true);
+            return;
+        }
+        if (!isAdmin && takenBy !== currentUser.username) {
+            showMessage('Вы не можете передать этот прибор, так как он не у вас', true);
+            return;
+        }
+
+        const users = getUsers();
+        // Список пользователей, которым можно передать (исключаем текущего)
+        const options = users
+            .filter(u => u.username !== currentUser.username && u.role !== 'admin') // можно передавать только сотрудникам, но можно и админам? по желанию
+            .map(u => `<option value="${u.username}">${u.username}</option>`)
+            .join('');
+        if (!options) {
+            showMessage('Нет доступных пользователей для передачи', true);
+            return;
+        }
+
+        const formHtml = `
+            <div class="form-group"><label>Выберите пользователя</label>
+                <select id="transferUser">${options}</select>
+            </div>
+            <div class="form-group"><label>Место использования</label><input type="text" id="transferWhere" value="${escapeHtml(instrument.taken_where) || ''}" placeholder="например, Лаборатория 3"></div>
+            <button class="btn btn-edit" id="confirmTransferBtn">Передать прибор</button>
+        `;
+        showModal(`Передача прибора: ${escapeHtml(instrument.name)}`, formHtml);
+        document.getElementById('confirmTransferBtn').onclick = async () => {
+            const newUser = document.getElementById('transferUser').value;
+            const newWhere = document.getElementById('transferWhere').value.trim() || instrument.taken_where;
+            if (!newUser) {
+                showMessage('Выберите пользователя', true);
+                return;
+            }
+            // Создаем запись в истории: текущий пользователь возвращает прибор, новый пользователь берёт
+            const returnDate = new Date().toISOString().slice(0,10);
+            closeHistoryEntry(instrument, returnDate, currentUser.username);
+            // Теперь выдаем новому пользователю
+            const issueDate = new Date().toISOString().slice(0,10);
+            addHistoryEntry(instrument, newUser, newWhere, issueDate);
+            instrument.taken_by = newUser;
+            instrument.taken_where = newWhere;
+            instrument.taken_date = issueDate;
+            instrument.condition = 'busy';
+            closeModal();
+            await saveToYandex();
+            renderApp();
+            showMessage(`Прибор передан пользователю ${newUser}`);
+        };
     }
 
     function escapeHtml(str) {
@@ -1187,40 +1145,31 @@
         const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">Открыть документ</a>` : '—';
         const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
 
-        // Кнопки первой строки
-        let issueButton = '';
-        let transferButton = '';
+        // Кнопки управления
+        let actionButtons = '';
         if (inst.condition === 'broken') {
-            issueButton = `<button class="btn btn-return-disabled" disabled>Прибор списан</button>`;
-            // Если администратор, добавляем кнопку "Вернуть из списания"
-            if (hasAccess(['admin'])) {
-                transferButton = `<button class="btn btn-edit" onclick="unretireInstrument(currentInstrument)">Вернуть из списания</button>`;
-            }
+            actionButtons = `<button class="btn btn-return-disabled" disabled>Прибор списан</button>`;
         } else if (hasTaken) {
             const isAdmin = currentUser && currentUser.role === 'admin';
             const isOwner = currentUser && inst.taken_by === currentUser.username;
             if (isAdmin || isOwner) {
-                issueButton = `<button class="btn btn-clear" onclick="returnInstrument(currentInstrument)">Положить прибор</button>`;
-                // Кнопка передачи (если прибор взят и текущий пользователь может его передать)
-                // Она будет отображаться для администратора и для владельца
-                transferButton = `<button class="btn btn-transfer" onclick="showTransferForm(currentInstrument)">Передать другому</button>`;
+                actionButtons = `
+                    <button class="btn btn-clear" onclick="returnInstrument(currentInstrument)">Положить прибор</button>
+                    ${isOwner ? `<button class="btn btn-edit" onclick="showTransferForm(currentInstrument)">Передать прибор</button>` : ''}
+                `;
             } else {
-                issueButton = `<button class="btn btn-return-disabled" disabled title="Этот прибор взял(а) ${escapeHtml(inst.taken_by)}">Положить прибор</button>`;
-                // transferButton не показываем, так как пользователь не владелец
+                actionButtons = `<button class="btn btn-return-disabled" disabled title="Этот прибор взял(а) ${escapeHtml(inst.taken_by)}">Положить прибор</button>`;
             }
         } else {
-            issueButton = `<button class="btn btn-edit" onclick="showIssueForm(currentInstrument)">Взять прибор</button>`;
-            // transferButton не показываем, так как прибор свободен
+            actionButtons = `<button class="btn btn-edit" onclick="showIssueForm(currentInstrument)">Взять прибор</button>`;
         }
 
         // Кнопки для администратора (вторая строка)
         let adminButtons = '';
         if (hasAccess(['admin'])) {
-            // Если прибор уже списан, вместо кнопки "Списать" показываем "Вернуть из списания" (она уже добавлена в transferButton)
-            const writeOffButton = inst.condition === 'broken' ? '' : `<button class="btn btn-status" onclick="setCondition(currentInstrument, 'broken')">Списать</button>`;
             adminButtons = `
                 <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">Редактировать прибор</button>
-                ${writeOffButton}
+                <button class="btn btn-status ${inst.condition === 'broken' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'broken')">Списать</button>
                 <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">Удалить прибор</button>
             `;
         }
@@ -1240,8 +1189,7 @@
             <div class="field"><div class="field-label">Документ</div><div class="field-value">${docLink}</div></div>
             ${takenHtml}
             <div class="button-group" style="margin-top:10px;">
-                ${issueButton}
-                ${transferButton}
+                ${actionButtons}
                 <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">QR-код</button>
                 <button class="btn btn-edit" onclick="window.copyInstrumentInfo()">Копировать информацию</button>
             </div>
