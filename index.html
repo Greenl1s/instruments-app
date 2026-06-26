@@ -33,6 +33,7 @@
         .btn-status.active { background: #2563eb; color: white; }
         .btn-logout { background: #ef4444; color: white; border: none; }
         .btn-return-disabled { background: #94a3b8; color: white; cursor: not-allowed; }
+        .btn-restore { background: #10b981; color: white; }
         .user-info { display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .user-card { background: white; border-radius: 20px; padding: 12px 24px; display: inline-flex; align-items: center; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 15px; }
@@ -75,6 +76,7 @@
         /* Стили для списка списанных */
         .retired-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
         .retired-list-item:last-child { border-bottom: none; }
+        .retired-list-item .btn-restore { padding: 4px 12px; font-size: 12px; border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -539,9 +541,8 @@
         openCalendar();
     }
 
-    // ---------- Модальное окно для списка списанных приборов (только для админа) ----------
+    // ---------- Модальное окно для списка списанных приборов с кнопкой "Вернуть" ----------
     function showRetiredList() {
-        if (!hasAccess(['admin'])) return; // только админ
         const retired = currentInstruments.filter(inst => inst.condition === 'broken');
         let html = '';
         if (retired.length === 0) {
@@ -551,7 +552,10 @@
             retired.forEach(inst => {
                 html += `<div class="retired-list-item">
                     <span><strong>#${escapeHtml(inst.id)}</strong> ${escapeHtml(inst.name)} (${escapeHtml(inst.serial_number)})</span>
-                    <span class="badge expired" style="margin:0;padding:4px 10px;">списан</span>
+                    <div>
+                        <span class="badge expired" style="margin:0;padding:4px 10px;">списан</span>
+                        ${hasAccess(['admin']) ? `<button class="btn btn-restore" onclick="restoreFromRetired('${inst.id}')">Вернуть</button>` : ''}
+                    </div>
                 </div>`;
             });
             html += '</div>';
@@ -559,6 +563,34 @@
         const content = html + `<div class="button-group"><button class="btn btn-clear" onclick="closeModal()">Закрыть</button></div>`;
         showModal('Выведены из эксплуатации', content);
     }
+
+    // ---------- Функция возврата из списания ----------
+    window.restoreFromRetired = (id) => {
+        const instrument = currentInstruments.find(inst => inst.id === id);
+        if (!instrument) {
+            showMessage('Прибор не найден', true);
+            return;
+        }
+        if (instrument.condition !== 'broken') {
+            showMessage('Этот прибор не списан', true);
+            return;
+        }
+        if (!hasAccess(['admin'])) {
+            showMessage('Только администратор может вернуть прибор из списания', true);
+            return;
+        }
+        if (confirm(`Вернуть прибор "${instrument.name}" (ID ${instrument.id}) в эксплуатацию?`)) {
+            instrument.condition = 'free';
+            instrument.taken_by = '';
+            instrument.taken_where = '';
+            instrument.taken_date = '';
+            closeModal(); // закрываем окно со списком списанных
+            saveToYandex().then(() => {
+                renderApp();
+                showMessage(`Прибор "${instrument.name}" возвращён в эксплуатацию`);
+            });
+        }
+    };
 
     // ---------- Вспомогательные функции (уведомления, статусы, работа с Яндекс.Диском) ----------
     function showMessage(msg, isError = false) {
@@ -1099,6 +1131,7 @@
         const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">Открыть документ</a>` : '—';
         const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
 
+        // Кнопка "Взять прибор" / "Положить прибор" (только для свободных/занятых, не для списанных)
         let issueButton = '';
         if (inst.condition === 'broken') {
             issueButton = `<button class="btn btn-return-disabled" disabled>Прибор списан</button>`;
@@ -1114,6 +1147,7 @@
             issueButton = `<button class="btn btn-edit" onclick="showIssueForm(currentInstrument)">Взять прибор</button>`;
         }
 
+        // Кнопки для администратора (вторая строка)
         let adminButtons = '';
         if (hasAccess(['admin'])) {
             adminButtons = `
@@ -1156,10 +1190,6 @@
         sortInstrumentsById();
         
         let filtered = currentInstruments;
-        // Если пользователь не админ, скрываем списанные приборы из общего списка
-        if (!hasAccess(['admin'])) {
-            filtered = filtered.filter(inst => inst.condition !== 'broken');
-        }
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(inst => 
@@ -1250,7 +1280,7 @@
                 <input type="text" class="search-box" id="globalSearchInput" placeholder="Умный поиск (название, серийный номер, модель)...">
                 <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
                     <button class="btn btn-edit" onclick="showCalendarModal()">Календарь поверок</button>
-                    ${hasAccess(['admin']) ? `<button class="btn btn-edit" onclick="showRetiredList()">Выведены из эксплуатации</button>` : ''}
+                    <button class="btn btn-edit" onclick="showRetiredList()">Выведены из эксплуатации</button>
                 </div>
             </div>
         `;
