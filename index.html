@@ -71,6 +71,10 @@
         .calendar-grid .day.has-event { background: #dcfce7; color: #15803d; font-weight: bold; border: 1px solid #86efac; }
         .calendar-grid .day.other-month { color: #94a3b8; }
         .calendar-grid .day.today { background: #e2e8f0; }
+
+        /* Стили для списка списанных */
+        .retired-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+        .retired-list-item:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
@@ -320,7 +324,7 @@
                 </select>
             </div>
             <div class="button-group">
-                <button class="btn btn-add-user" id="confirmAddUserBtn">➕ Добавить сотрудника</button>
+                <button class="btn btn-add-user" id="confirmAddUserBtn">Добавить сотрудника</button>
                 <button class="btn btn-clear" id="cancelAddUserBtn">Отмена</button>
             </div>
         `;
@@ -360,7 +364,7 @@
         const formHtml = `
             <div id="usersList">${rowsHtml}</div>
             <div class="button-group">
-                <button class="btn btn-add-user" onclick="showAddUserForm()">➕ Добавить сотрудника</button>
+                <button class="btn btn-add-user" onclick="showAddUserForm()">Добавить сотрудника</button>
                 <button class="btn btn-clear" id="closeUsersBtn">Закрыть</button>
             </div>
         `;
@@ -512,7 +516,7 @@
                 </div>
                 <div class="button-group"><button class="btn btn-clear" onclick="closeModal()">Закрыть</button></div>
             `;
-            showModal('📅 Календарь поверок', content);
+            showModal('Календарь поверок', content);
             window._calendarYear = year;
             window._calendarMonth = month;
             window._calendarUpdate = () => {
@@ -533,6 +537,26 @@
         }
 
         openCalendar();
+    }
+
+    // ---------- Модальное окно для списка списанных приборов ----------
+    function showRetiredList() {
+        const retired = currentInstruments.filter(inst => inst.condition === 'broken');
+        let html = '';
+        if (retired.length === 0) {
+            html = '<p>Нет приборов, выведенных из эксплуатации.</p>';
+        } else {
+            html = '<div style="max-height: 400px; overflow-y: auto;">';
+            retired.forEach(inst => {
+                html += `<div class="retired-list-item">
+                    <span><strong>#${escapeHtml(inst.id)}</strong> ${escapeHtml(inst.name)} (${escapeHtml(inst.serial_number)})</span>
+                    <span class="badge expired" style="margin:0;padding:4px 10px;">списан</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+        const content = html + `<div class="button-group"><button class="btn btn-clear" onclick="closeModal()">Закрыть</button></div>`;
+        showModal('Выведены из эксплуатации', content);
     }
 
     // ---------- Вспомогательные функции (уведомления, статусы, работа с Яндекс.Диском) ----------
@@ -558,7 +582,7 @@
     }
     function getConditionText(condition) {
         if (condition === 'busy') return 'занят';
-        if (condition === 'broken') return 'не исправен';
+        if (condition === 'broken') return 'списан';
         return 'свободен';
     }
     function getConditionClass(condition) {
@@ -580,6 +604,7 @@
             const { href } = await response.json();
             if (!href) throw new Error("Нет ссылки для загрузки");
 
+            // Основной лист "Приборы"
             const headersRow = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
                                 "Дата поверки", "Действительно до", "Ссылка на документ",
                                 "Кто взял", "Место использования", "Дата выдачи", "Состояние"];
@@ -594,6 +619,7 @@
             ];
             const wsInstruments = XLSX.utils.aoa_to_sheet(wsData);
 
+            // Лист "История"
             const historyHeaders = ["ID прибора", "Название", "Кто взял", "Место использования", "Дата выдачи", "Кто вернул", "Дата возврата"];
             const historyData = [
                 historyHeaders,
@@ -603,9 +629,25 @@
             ];
             const wsHistory = XLSX.utils.aoa_to_sheet(historyData);
 
+            // Лист "Списанные"
+            const retired = currentInstruments.filter(inst => inst.condition === 'broken');
+            const retiredHeaders = ["ID", "Наименование", "Серийный номер", "Модель", "Тип",
+                                   "Дата поверки", "Действительно до", "Ссылка на документ"];
+            const retiredData = [
+                retiredHeaders,
+                ...retired.map(inst => [
+                    inst.id, inst.name, inst.serial_number, inst.model, inst.type,
+                    inst.verification_date, inst.valid_until, inst.document_url
+                ])
+            ];
+            const wsRetired = XLSX.utils.aoa_to_sheet(retiredData);
+
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, wsInstruments, "Приборы");
             XLSX.utils.book_append_sheet(wb, wsHistory, "История");
+            XLSX.utils.book_append_sheet(wb, wsRetired, "Списанные");
+
+            // Лист пользователей
             const users = getUsers();
             const usersSheetData = [["Имя пользователя", "Пароль", "Роль"]];
             for (const u of users) {
@@ -643,7 +685,7 @@
         });
     }
 
-    // ---------- История: закрытие записи о возврате (с указанием, кто вернул) ----------
+    // ---------- История: закрытие записи о возврате ----------
     function closeHistoryEntry(instrument, returnDate, returnedBy) {
         for (let i = currentHistory.length - 1; i >= 0; i--) {
             if (currentHistory[i].id === instrument.id && !currentHistory[i].returnDate) {
@@ -652,7 +694,6 @@
                 return true;
             }
         }
-        // Если не нашли открытую запись (например, прибор был возвращён без истории), создаём новую
         currentHistory.push({
             id: instrument.id,
             name: instrument.name,
@@ -665,7 +706,7 @@
         return false;
     }
 
-    // ---------- Загрузка данных (с поддержкой нового столбца) ----------
+    // ---------- Загрузка данных ----------
     async function getTableData() {
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
@@ -796,7 +837,7 @@
                 currentInstruments.splice(index, 1);
                 await saveToYandex();
                 renderApp();
-                showMessage(`✅ Прибор "${instrument.name}" удалён!`);
+                showMessage(`Прибор "${instrument.name}" удалён!`);
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('id') === instrument.id) {
                     window.location.href = window.location.href.split('?')[0];
@@ -809,6 +850,7 @@
         if (instrument.condition === condition) return;
         instrument.condition = condition;
         if (condition === 'broken') {
+            // При списании очищаем выдачу
             instrument.taken_by = '';
             instrument.taken_where = '';
             instrument.taken_date = '';
@@ -841,7 +883,7 @@
             <div class="form-group"><label>Действительно до</label><input type="date" id="new_valid" value="${today}"></div>
             <div class="form-group"><label>Ссылка на документ</label><input type="text" id="new_doc" placeholder="https://..."></div>
             <div class="button-group">
-                <button class="btn btn-add" id="confirmAddBtn">➕ Добавить прибор</button>
+                <button class="btn btn-add" id="confirmAddBtn">Добавить прибор</button>
                 <button class="btn btn-clear" id="cancelAddBtn">Отмена</button>
             </div>
         `;
@@ -866,7 +908,7 @@
             closeModal();
             renderApp();
             await saveToYandex();
-            showMessage(`✅ Прибор "${newInstrument.name}" добавлен и сохранён!`);
+            showMessage(`Прибор "${newInstrument.name}" добавлен и сохранён!`);
         };
         document.getElementById('cancelAddBtn').onclick = closeModal;
         const typeSelect = document.getElementById('new_type');
@@ -930,7 +972,7 @@
             closeModal();
             renderApp();
             await saveToYandex();
-            showMessage("✅ Изменения сохранены!");
+            showMessage("Изменения сохранены!");
         };
         document.getElementById('cancelAllBtn').onclick = closeModal;
     }
@@ -945,7 +987,7 @@
         const formHtml = `
             <div class="form-group"><label>Место использования</label><input type="text" id="takenWhere" placeholder="например, Лаборатория 3"></div>
             <div class="form-group"><label>Дата выдачи</label><input type="date" id="takenDate" value="${today}"></div>
-            <button class="btn btn-edit" id="saveIssueBtn">📝 Выдать прибор</button>
+            <button class="btn btn-edit" id="saveIssueBtn">Выдать прибор</button>
             <button class="btn btn-clear" id="cancelIssueBtn">Отмена</button>
         `;
         showModal(`Выдача прибора: ${escapeHtml(instrument.name)}`, formHtml);
@@ -965,7 +1007,7 @@
             closeModal();
             await saveToYandex();
             renderApp();
-            showMessage(`✅ Прибор выдан сотруднику ${newTakenBy}`);
+            showMessage(`Прибор выдан сотруднику ${newTakenBy}`);
         };
         document.getElementById('cancelIssueBtn').onclick = closeModal;
     }
@@ -977,31 +1019,24 @@
             return;
         }
 
-        // Проверяем, кто взял прибор
         const takenBy = instrument.taken_by;
         const isAdmin = currentUser.role === 'admin';
 
-        // Если прибор не взят – возвращать нечего
         if (!takenBy || takenBy.trim() === '') {
             showMessage('Прибор уже на месте', true);
             return;
         }
 
-        // Логика проверки прав:
-        // 1. Если администратор – можно вернуть любой прибор
-        // 2. Если обычный пользователь – можно вернуть только свой
         if (!isAdmin && takenBy !== currentUser.username) {
-            showMessage(`❌ Вы не можете вернуть этот прибор. Его взял(а) ${takenBy}`, true);
+            showMessage(`Вы не можете вернуть этот прибор. Его взял(а) ${takenBy}`, true);
             return;
         }
 
         const returnDate = new Date().toISOString().slice(0,10);
-        const returnedBy = isAdmin ? currentUser.username : takenBy; // если админ, пишем его имя, иначе имя того, кто взял
+        const returnedBy = isAdmin ? currentUser.username : takenBy;
 
-        // Закрываем запись в истории
         closeHistoryEntry(instrument, returnDate, returnedBy);
 
-        // Очищаем поля выдачи
         instrument.taken_by = '';
         instrument.taken_where = '';
         instrument.taken_date = '';
@@ -1011,7 +1046,7 @@
 
         renderApp();
         saveToYandex().then(() => {
-            const msg = isAdmin ? `✅ Прибор возвращён администратором ${currentUser.username}` : '✅ Прибор возвращён';
+            const msg = isAdmin ? `Прибор возвращён администратором ${currentUser.username}` : 'Прибор возвращён';
             showMessage(msg);
         });
     }
@@ -1028,14 +1063,14 @@
 
     window.copyInstrumentInfo = () => {
         if (!window.currentInstrument) {
-            showMessage("❌ Нет данных для копирования", true);
+            showMessage("Нет данных для копирования", true);
             return;
         }
         const inst = window.currentInstrument;
         const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
         const text = `Название: ${inst.name}\nСерийный номер: ${inst.serial_number || '—'}\nМодель: ${inst.model || '—'}\nТип: ${inst.type || '—'}\n${dateLabel}: ${inst.verification_date || '—'}\nДействительно до: ${inst.valid_until || '—'}\nСсылка на документ: ${inst.document_url || '—'}`;
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => showMessage("✅ Информация скопирована!")).catch(() => showMessage("❌ Ошибка копирования", true));
+            navigator.clipboard.writeText(text).then(() => showMessage("Информация скопирована!")).catch(() => showMessage("Ошибка копирования", true));
         } else {
             const textarea = document.createElement('textarea');
             textarea.value = text;
@@ -1043,7 +1078,7 @@
             textarea.select();
             document.execCommand('copy');
             document.body.removeChild(textarea);
-            showMessage("✅ Информация скопирована!");
+            showMessage("Информация скопирована!");
         }
     };
 
@@ -1061,40 +1096,32 @@
                 <div class="field"><div class="field-label">Дата выдачи</div><div class="field-value">${escapeHtml(inst.taken_date) || '—'}</div></div>
             </div>
         ` : '';
-        const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">📄 Открыть документ</a>` : '—';
+        const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">Открыть документ</a>` : '—';
         const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
 
-        // Логика кнопки "Положить прибор"
+        // Кнопка "Взять прибор" / "Положить прибор" (только для свободных/занятых, не для списанных)
         let issueButton = '';
-        if (hasTaken) {
+        if (inst.condition === 'broken') {
+            issueButton = `<button class="btn btn-return-disabled" disabled>Прибор списан</button>`;
+        } else if (hasTaken) {
             const isAdmin = currentUser && currentUser.role === 'admin';
             const isOwner = currentUser && inst.taken_by === currentUser.username;
-            // Показываем кнопку, если:
-            // - пользователь администратор
-            // - или пользователь является тем, кто взял прибор
             if (isAdmin || isOwner) {
-                issueButton = `<button class="btn btn-clear" onclick="returnInstrument(currentInstrument)">📦 Положить прибор</button>`;
+                issueButton = `<button class="btn btn-clear" onclick="returnInstrument(currentInstrument)">Положить прибор</button>`;
             } else {
-                // Если прибор взят другим пользователем, показываем серую кнопку-заглушку
-                issueButton = `<button class="btn btn-return-disabled" disabled title="Этот прибор взял(а) ${escapeHtml(inst.taken_by)}">📦 Положить прибор</button>`;
+                issueButton = `<button class="btn btn-return-disabled" disabled title="Этот прибор взял(а) ${escapeHtml(inst.taken_by)}">Положить прибор</button>`;
             }
         } else {
-            // Если прибор свободен, показываем кнопку "Взять прибор" (для всех)
-            issueButton = `<button class="btn btn-edit" onclick="showIssueForm(currentInstrument)">📝 Взять прибор</button>`;
+            issueButton = `<button class="btn btn-edit" onclick="showIssueForm(currentInstrument)">Взять прибор</button>`;
         }
 
-        let adminExtraHtml = '';
+        // Кнопки для администратора (вторая строка)
+        let adminButtons = '';
         if (hasAccess(['admin'])) {
-            adminExtraHtml = `
-                <div class="button-group" style="margin-top:0;">
-                    <button class="btn btn-status ${inst.condition === 'free' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'free')">Свободен</button>
-                    <button class="btn btn-status ${inst.condition === 'busy' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'busy')">Занят</button>
-                    <button class="btn btn-status ${inst.condition === 'broken' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'broken')">Не исправен</button>
-                </div>
-                <div class="button-group">
-                    <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">✏️ Редактировать прибор</button>
-                    <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">🗑️ Удалить прибор</button>
-                </div>
+            adminButtons = `
+                <button class="btn btn-edit" onclick="showEditAllForm(currentInstrument)">Редактировать прибор</button>
+                <button class="btn btn-status ${inst.condition === 'broken' ? 'active' : ''}" onclick="setCondition(currentInstrument, 'broken')">Списать</button>
+                <button class="btn btn-delete" onclick="confirmDelete(currentInstrument)">Удалить прибор</button>
             `;
         }
 
@@ -1112,12 +1139,14 @@
             <div class="field"><div class="field-label">Действительно до</div><div class="field-value">${escapeHtml(inst.valid_until) || '—'}</div></div>
             <div class="field"><div class="field-label">Документ</div><div class="field-value">${docLink}</div></div>
             ${takenHtml}
-            ${adminExtraHtml}
-            <div class="button-group">
+            <div class="button-group" style="margin-top:10px;">
                 ${issueButton}
-                <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">📱 QR-код</button>
-                <button class="btn btn-edit" onclick="window.copyInstrumentInfo()">📋 Копировать информацию</button>
-                <a href="?" class="btn btn-clear">← К списку</a>
+                <button class="btn btn-qr" onclick="showQRModal(currentInstrument)">QR-код</button>
+                <button class="btn btn-edit" onclick="window.copyInstrumentInfo()">Копировать информацию</button>
+            </div>
+            ${adminButtons ? `<div class="button-group">${adminButtons}</div>` : ''}
+            <div class="button-group">
+                <a href="?" class="btn btn-clear">К списку</a>
             </div>
         </div>`;
     }
@@ -1147,7 +1176,7 @@
         let html = '<div class="card"><h1>Оборудование</h1>';
         html += `<div class="filter-row">`;
         if (hasAccess(['admin'])) {
-            html += `<button class="btn btn-add" onclick="showAddForm()">➕ Добавить прибор</button>`;
+            html += `<button class="btn btn-add" onclick="showAddForm()">Добавить прибор</button>`;
         } else {
             html += `<div></div>`;
         }
@@ -1162,7 +1191,7 @@
                         <option value="all" ${conditionFilter === 'all' ? 'selected' : ''}>Состояние: все</option>
                         <option value="свободен" ${conditionFilter === 'свободен' ? 'selected' : ''}>Свободен</option>
                         <option value="занят" ${conditionFilter === 'занят' ? 'selected' : ''}>Занят</option>
-                        <option value="не исправен" ${conditionFilter === 'не исправен' ? 'selected' : ''}>Не исправен</option>
+                        <option value="списан" ${conditionFilter === 'списан' ? 'selected' : ''}>Списан</option>
                     </select>
                 </div>`;
         html += `</div>`;
@@ -1198,7 +1227,7 @@
                 window.currentInstrument = inst;
                 appDiv.innerHTML = renderCard(inst);
             } else {
-                appDiv.innerHTML = `<div class="card error">Прибор не найден<br><a href="?" style="color:#2563eb;">← Назад</a></div>`;
+                appDiv.innerHTML = `<div class="card error">Прибор не найден<br><a href="?" style="color:#2563eb;">Назад</a></div>`;
             }
             return;
         }
@@ -1208,17 +1237,18 @@
             <div class="user-info">
                 <div class="user-card">
                     <span><strong>${roleText}</strong></span>
-                    ${hasAccess(['admin']) ? `<button class="btn btn-add-user" onclick="showManageUsersForm()">👥 Управление сотрудниками</button>` : ''}
-                    <button class="btn btn-edit" onclick="showEditProfileForm()">✏️ Редактировать профиль</button>
+                    ${hasAccess(['admin']) ? `<button class="btn btn-add-user" onclick="showManageUsersForm()">Управление сотрудниками</button>` : ''}
+                    <button class="btn btn-edit" onclick="showEditProfileForm()">Редактировать профиль</button>
                     <button class="btn btn-logout" onclick="logout()">Выйти</button>
                 </div>
             </div>
         `;
         const searchCardHtml = `
             <div class="card">
-                <input type="text" class="search-box" id="globalSearchInput" placeholder="🔍 Умный поиск (название, серийный номер, модель)...">
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button class="btn btn-edit" onclick="showCalendarModal()">📅 Календарь поверок</button>
+                <input type="text" class="search-box" id="globalSearchInput" placeholder="Умный поиск (название, серийный номер, модель)...">
+                <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-edit" onclick="showCalendarModal()">Календарь поверок</button>
+                    <button class="btn btn-edit" onclick="showRetiredList()">Выведены из эксплуатации</button>
                 </div>
             </div>
         `;
