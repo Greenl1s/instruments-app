@@ -68,11 +68,12 @@
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
         .calendar-grid .day { padding: 8px; border-radius: 6px; cursor: default; font-size: 14px; }
         .calendar-grid .day.header { font-weight: bold; background: #f1f5f9; }
-        .calendar-grid .day.has-event { background: #dcfce7; color: #15803d; font-weight: bold; border: 1px solid #86efac; }
+        .calendar-grid .day.has-event { background: #dcfce7; color: #15803d; font-weight: bold; border: 1px solid #86efac; cursor: pointer; }
+        .calendar-grid .day.has-event:hover { background: #bbf7d0; }
         .calendar-grid .day.other-month { color: #94a3b8; }
         .calendar-grid .day.today { background: #e2e8f0; }
-
-        /* Стили для списка списанных */
+        .event-list-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e2e8f0; }
+        .event-list-item:last-child { border-bottom: none; }
         .retired-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
         .retired-list-item:last-child { border-bottom: none; }
     </style>
@@ -121,7 +122,7 @@
         return expected;
     }
 
-    // ---------- Сортировка приборов по ID (числовому) ----------
+    // ---------- Сортировка приборов по ID ----------
     function sortInstrumentsById() {
         currentInstruments.sort((a, b) => {
             const idA = parseInt(a.id, 10);
@@ -138,7 +139,7 @@
         if (modal) modal.style.display = 'none';
     }
 
-    // ---------- Работа с пользователями (синхронизация с Excel) ----------
+    // ---------- Работа с пользователями ----------
     async function loadUsersFromExcel() {
         try {
             const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
@@ -312,7 +313,7 @@
         }
     }
 
-    // ---------- Формы управления сотрудниками (только для админа) ----------
+    // ---------- Управление сотрудниками ----------
     function showAddUserForm() {
         const formHtml = `
             <div class="form-group"><label>Имя сотрудника</label><input type="text" id="newUsername" placeholder="ivanov"></div>
@@ -323,9 +324,7 @@
                     <option value="admin">Администратор</option>
                 </select>
             </div>
-            <div class="button-group">
-                <button class="btn btn-add-user" id="confirmAddUserBtn">Добавить сотрудника</button>
-            </div>
+            <button class="btn btn-add-user" id="confirmAddUserBtn">Добавить сотрудника</button>
         `;
         showModal('Добавление нового сотрудника', formHtml);
         document.getElementById('confirmAddUserBtn').onclick = () => {
@@ -361,9 +360,7 @@
         });
         const formHtml = `
             <div id="usersList">${rowsHtml}</div>
-            <div class="button-group">
-                <button class="btn btn-add-user" onclick="showAddUserForm()">Добавить сотрудника</button>
-            </div>
+            <button class="btn btn-add-user" onclick="showAddUserForm()">Добавить сотрудника</button>
         `;
         showModal('Управление сотрудниками', formHtml);
     }
@@ -381,9 +378,7 @@
                     <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Администратор</option>
                 </select>
             </div>
-            <div class="button-group">
-                <button class="btn btn-edit" id="saveEditBtn">Сохранить</button>
-            </div>
+            <button class="btn btn-edit" id="saveEditBtn">Сохранить</button>
         `;
         showModal(`Редактирование пользователя ${oldUsername}`, formHtml);
         document.getElementById('saveEditBtn').onclick = () => {
@@ -426,14 +421,12 @@
         }
     };
 
-    // ---------- Редактирование профиля текущего пользователя ----------
+    // ---------- Редактирование профиля ----------
     function showEditProfileForm() {
         const formHtml = `
             <div class="form-group"><label>Новое имя пользователя</label><input type="text" id="profileUsername" value="${escapeHtml(currentUser.username)}"></div>
             <div class="form-group"><label>Новый пароль</label><input type="password" id="profilePassword" placeholder="Оставьте пустым, чтобы не менять"></div>
-            <div class="button-group">
-                <button class="btn btn-edit" id="saveProfileBtn">Сохранить изменения</button>
-            </div>
+            <button class="btn btn-edit" id="saveProfileBtn">Сохранить изменения</button>
         `;
         showModal('Редактирование профиля', formHtml);
         document.getElementById('saveProfileBtn').onclick = () => {
@@ -456,7 +449,7 @@
         };
     }
 
-    // ---------- Календарь поверок ----------
+    // ---------- Календарь поверок (по датам окончания) ----------
     function showCalendarModal() {
         const currentDate = new Date();
         let year = currentDate.getFullYear();
@@ -467,11 +460,11 @@
             const daysInMonth = new Date(y, m + 1, 0).getDate();
             const today = new Date();
             
-            const verificationDates = currentInstruments
-                .map(inst => inst.verification_date)
+            const eventDates = currentInstruments
+                .map(inst => inst.valid_until)
                 .filter(d => d && d.length === 10)
                 .map(d => new Date(d + 'T00:00:00'));
-            const dateSet = new Set(verificationDates.map(d => d.toDateString()));
+            const dateSet = new Set(eventDates.map(d => d.toDateString()));
 
             let html = `<div class="calendar-header">
                 <button class="btn btn-small" onclick="changeMonth(-1)">◀</button>
@@ -495,7 +488,8 @@
                 let classes = 'day';
                 if (isToday) classes += ' today';
                 if (hasEvent) classes += ' has-event';
-                html += `<div class="${classes}">${day}</div>`;
+                const clickAttr = hasEvent ? `onclick="window.showEventsForDate('${dateObj.toISOString().slice(0,10)}')"` : '';
+                html += `<div class="${classes}" ${clickAttr}>${day}</div>`;
             }
             html += `</div>`;
             return html;
@@ -506,7 +500,7 @@
                 <div id="calendarContainer">
                     ${renderCalendar(year, month)}
                 </div>
-                <div class="button-group"><button class="btn btn-clear" onclick="closeModal()">Закрыть</button></div>
+                <button class="btn btn-clear" onclick="closeModal()">Закрыть</button>
             `;
             showModal('Календарь поверок', content);
             window._calendarYear = year;
@@ -525,6 +519,20 @@
                 window._calendarMonth = newMonth;
                 window._calendarYear = newYear;
                 if (window._calendarUpdate) window._calendarUpdate();
+            };
+            window.showEventsForDate = (dateStr) => {
+                const instruments = currentInstruments.filter(inst => inst.valid_until === dateStr);
+                if (instruments.length === 0) return;
+                let listHtml = '<div style="max-height: 300px; overflow-y: auto;">';
+                instruments.forEach(inst => {
+                    listHtml += `<div class="event-list-item">
+                        <span><strong>#${escapeHtml(inst.id)}</strong> ${escapeHtml(inst.name)} (${escapeHtml(inst.serial_number)})</span>
+                        <span class="badge good" style="margin:0;padding:2px 8px;">срок истекает</span>
+                    </div>`;
+                });
+                listHtml += '</div>';
+                const content = listHtml + `<button class="btn btn-clear" onclick="closeModal()">Закрыть</button>`;
+                showModal(`Приборы с истекающим сроком (${dateStr})`, content);
             };
         }
 
@@ -547,11 +555,11 @@
             });
             html += '</div>';
         }
-        const content = html + `<div class="button-group"><button class="btn btn-clear" onclick="closeModal()">Закрыть</button></div>`;
+        const content = html + `<button class="btn btn-clear" onclick="closeModal()">Закрыть</button>`;
         showModal('Выведены из эксплуатации', content);
     }
 
-    // ---------- Вспомогательные функции (уведомления, статусы, работа с Яндекс.Диском) ----------
+    // ---------- Вспомогательные функции ----------
     function showMessage(msg, isError = false) {
         let toast = document.createElement('div');
         toast.className = 'toast';
@@ -664,7 +672,6 @@
         }
     }
 
-    // ---------- История: добавление записи о выдаче ----------
     function addHistoryEntry(instrument, takenBy, takenWhere, issuedDate) {
         currentHistory.push({
             id: instrument.id,
@@ -677,7 +684,6 @@
         });
     }
 
-    // ---------- История: закрытие записи о возврате ----------
     function closeHistoryEntry(instrument, returnDate, returnedBy) {
         for (let i = currentHistory.length - 1; i >= 0; i--) {
             if (currentHistory[i].id === instrument.id && !currentHistory[i].returnDate) {
@@ -698,7 +704,6 @@
         return false;
     }
 
-    // ---------- Загрузка данных ----------
     async function getTableData() {
         const yandexApiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=https://disk.yandex.ru/i/${PUBLIC_KEY}`;
         const proxiedApiUrl = PROXY_URL + encodeURIComponent(yandexApiUrl);
@@ -856,7 +861,7 @@
         saveToYandex().then(() => showMessage(`Статус изменён на "${getConditionText(condition)}"`));
     }
 
-    // ---------- Добавление нового прибора ----------
+    // ---------- Добавление прибора ----------
     function showAddForm() {
         const nextId = getNextAvailableId();
         const today = new Date().toISOString().slice(0,10);
@@ -873,9 +878,7 @@
             <div class="form-group" id="new_date_group"><label>Дата поверки</label><input type="date" id="new_verif" value="${today}"></div>
             <div class="form-group"><label>Действительно до</label><input type="date" id="new_valid" value="${today}"></div>
             <div class="form-group"><label>Ссылка на документ</label><input type="text" id="new_doc" placeholder="https://..."></div>
-            <div class="button-group">
-                <button class="btn btn-add" id="confirmAddBtn">Добавить прибор</button>
-            </div>
+            <button class="btn btn-add" id="confirmAddBtn">Добавить прибор</button>
         `;
         showModal(`Добавление нового прибора (ID будет ${nextId})`, formHtml);
         document.getElementById('confirmAddBtn').onclick = async () => {
@@ -997,7 +1000,7 @@
         };
     }
 
-    // ---------- Возврат прибора (с проверкой прав) ----------
+    // ---------- Возврат прибора ----------
     function returnInstrument(instrument) {
         if (!currentUser) {
             showMessage('Ошибка: вы не авторизованы', true);
@@ -1042,7 +1045,6 @@
             showMessage('Ошибка: вы не авторизованы', true);
             return;
         }
-        // Проверяем, что прибор взят текущим пользователем (или администратором)
         const isAdmin = currentUser.role === 'admin';
         const takenBy = instrument.taken_by;
         if (!takenBy || takenBy.trim() === '') {
@@ -1055,9 +1057,8 @@
         }
 
         const users = getUsers();
-        // Список пользователей, которым можно передать (исключаем текущего)
         const options = users
-            .filter(u => u.username !== currentUser.username && u.role !== 'admin') // можно передавать только сотрудникам, но можно и админам? по желанию
+            .filter(u => u.username !== currentUser.username && u.role !== 'admin')
             .map(u => `<option value="${u.username}">${u.username}</option>`)
             .join('');
         if (!options) {
@@ -1080,10 +1081,8 @@
                 showMessage('Выберите пользователя', true);
                 return;
             }
-            // Создаем запись в истории: текущий пользователь возвращает прибор, новый пользователь берёт
             const returnDate = new Date().toISOString().slice(0,10);
             closeHistoryEntry(instrument, returnDate, currentUser.username);
-            // Теперь выдаем новому пользователю
             const issueDate = new Date().toISOString().slice(0,10);
             addHistoryEntry(instrument, newUser, newWhere, issueDate);
             instrument.taken_by = newUser;
@@ -1128,7 +1127,7 @@
         }
     };
 
-    // --- Карточка прибора ---
+    // ---------- Карточка прибора ----------
     function renderCard(inst) {
         const verifText = getVerificationText(inst.valid_until);
         const verifClass = getVerificationClass(inst.valid_until);
@@ -1200,7 +1199,7 @@
         </div>`;
     }
 
-    // --- Список приборов (с умным поиском и сортировкой) ---
+    // ---------- Список приборов ----------
     function renderListContainer() {
         if (!currentInstruments.length) return '<div class="card"><h1>Оборудование</h1><div class="error">Нет данных</div></div>';
         
@@ -1262,7 +1261,7 @@
         return html;
     }
 
-    // --- Главная страница ---
+    // ---------- Главная страница ----------
     function renderApp() {
         if (!currentUser) return;
         const urlParams = new URLSearchParams(window.location.search);
@@ -1348,7 +1347,7 @@
         attachFilterEvents();
     }
 
-    // --- Инициализация ---
+    // ---------- Инициализация ----------
     (async () => {
         try {
             await initUsers();
