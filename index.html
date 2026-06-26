@@ -539,8 +539,9 @@
         openCalendar();
     }
 
-    // ---------- Модальное окно для списка списанных приборов ----------
+    // ---------- Модальное окно для списка списанных приборов (только для админа) ----------
     function showRetiredList() {
+        if (!hasAccess(['admin'])) return; // только админ
         const retired = currentInstruments.filter(inst => inst.condition === 'broken');
         let html = '';
         if (retired.length === 0) {
@@ -850,7 +851,6 @@
         if (instrument.condition === condition) return;
         instrument.condition = condition;
         if (condition === 'broken') {
-            // При списании очищаем выдачу
             instrument.taken_by = '';
             instrument.taken_where = '';
             instrument.taken_date = '';
@@ -1099,7 +1099,6 @@
         const docLink = inst.document_url && inst.document_url !== 'nan' ? `<a href="${escapeHtml(inst.document_url)}" target="_blank">Открыть документ</a>` : '—';
         const dateLabel = inst.type === 'Поверка' ? 'Дата поверки' : 'Дата калибровки';
 
-        // Кнопка "Взять прибор" / "Положить прибор" (только для свободных/занятых, не для списанных)
         let issueButton = '';
         if (inst.condition === 'broken') {
             issueButton = `<button class="btn btn-return-disabled" disabled>Прибор списан</button>`;
@@ -1115,7 +1114,6 @@
             issueButton = `<button class="btn btn-edit" onclick="showIssueForm(currentInstrument)">Взять прибор</button>`;
         }
 
-        // Кнопки для администратора (вторая строка)
         let adminButtons = '';
         if (hasAccess(['admin'])) {
             adminButtons = `
@@ -1158,6 +1156,10 @@
         sortInstrumentsById();
         
         let filtered = currentInstruments;
+        // Если пользователь не админ, скрываем списанные приборы из общего списка
+        if (!hasAccess(['admin'])) {
+            filtered = filtered.filter(inst => inst.condition !== 'broken');
+        }
         if (searchQuery.trim() !== "") {
             const query = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(inst => 
@@ -1248,7 +1250,7 @@
                 <input type="text" class="search-box" id="globalSearchInput" placeholder="Умный поиск (название, серийный номер, модель)...">
                 <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
                     <button class="btn btn-edit" onclick="showCalendarModal()">Календарь поверок</button>
-                    <button class="btn btn-edit" onclick="showRetiredList()">Выведены из эксплуатации</button>
+                    ${hasAccess(['admin']) ? `<button class="btn btn-edit" onclick="showRetiredList()">Выведены из эксплуатации</button>` : ''}
                 </div>
             </div>
         `;
