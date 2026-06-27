@@ -1,0 +1,1 @@
+export const state = { workbook: null, instruments: [], history: [], users: [], retired: [], currentUser: null, search: '', verification: 'all', condition: 'all' };
