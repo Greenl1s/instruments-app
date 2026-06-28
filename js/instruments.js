@@ -99,6 +99,47 @@ export function renderCard(id, goList) {
   const isOwner = item.taken_by === state.currentUser.username;
   const isRetiredFlag = isRetired || item.condition === 'retired';
 
+  // --- Построение кнопок ---
+  let mainActions = '';
+  if (isRetiredFlag) {
+    // Списанный прибор
+    mainActions += '<button class="secondary" data-qr>QR</button>';
+    mainActions += '<button class="secondary" data-copy>Копировать</button>';
+    if (isAdmin) {
+      mainActions += '<button class="primary" data-restore>Восстановить</button>';
+    }
+  } else {
+    // Не списан
+    if (!isTaken) {
+      mainActions += '<button class="primary" data-issue>Взять</button>';
+    } else if (isTaken && (isOwner || isAdmin)) {
+      mainActions += '<button class="primary" data-return>Вернуть</button>';
+      if (isOwner) mainActions += '<button class="secondary" data-transfer>Передать</button>';
+    }
+    mainActions += '<button class="secondary" data-qr>QR</button>';
+    mainActions += '<button class="secondary" data-copy>Копировать</button>';
+    if (isAdmin) {
+      mainActions += '<button class="secondary" data-edit>Редактировать</button>';
+    }
+  }
+
+  let adminActions = '';
+  if (isAdmin && !isRetiredFlag) {
+    adminActions = '<button class="danger" data-retire>Списать</button><button class="danger" data-delete>Удалить</button>';
+  }
+
+  // Кнопка "К списку" всегда справа внизу
+  const backButton = '<button class="secondary" data-back>К списку</button>';
+
+  // Формируем HTML кнопок
+  let actionsHtml = '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">' + mainActions + '</div>';
+  if (adminActions) {
+    actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">' + adminActions + '<span style="flex:1"></span>' + backButton + '</div>';
+  } else {
+    actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; justify-content:flex-end;">' + backButton + '</div>';
+  }
+
+  // Формируем карточку
   $('cardScreen').innerHTML =
     '<article class="panel card"><h1>' + escapeHtml(item.name || 'Без названия') + '</h1>' +
     '<div class="badges"><span class="badge ' + verificationBadge(item.valid_until) + '">' + verificationText(item.valid_until) + '</span>' +
@@ -113,17 +154,8 @@ export function renderCard(id, goList) {
     field('Документ', item.document_url ? '<a href="' + escapeAttr(item.document_url) + '" target="_blank" rel="noopener">Открыть</a>' : '—', true) +
     '</div>' +
     (isTaken ? '<div class="issued">' + field('Кто взял', item.taken_by) + field('Место', item.taken_where) + field('Доп.данные', item.taken_extra) + field('Дата выдачи', item.taken_date) + '</div>' : '') +
-    '<div class="actions">' +
-    (isRetiredFlag ? '' : (!isTaken ? '<button class="primary" data-issue>Взять</button>' : '')) +
-    (isRetiredFlag ? '' : (isTaken && (isOwner || isAdmin) ? '<button class="primary" data-return>Вернуть</button>' : '')) +
-    (isRetiredFlag ? '' : (isTaken && isOwner ? '<button class="secondary" data-transfer>Передать</button>' : '')) +
-    (isAdmin && !isRetiredFlag ? '<button class="secondary" data-edit>Редактировать</button><button class="danger" data-retire>Списать</button>' : '') +
-    (isAdmin && isRetiredFlag ? '<button class="primary" data-restore>Восстановить</button>' : '') +
-    (isAdmin && !isRetiredFlag ? '<button class="danger" data-delete>Удалить</button>' : '') +
-    '<button class="secondary" data-qr>QR</button>' +
-    '<button class="secondary" data-copy>Копировать</button>' +
-    '<button class="secondary" data-back>К списку</button>' +
-    '</div></article>';
+    actionsHtml +
+    '</article>';
 
   bindCardActions(item, goList, isRetiredFlag);
 }
@@ -242,14 +274,11 @@ async function retireInstrument(item, goList) {
 // --- ВОССТАНОВИТЬ СПИСАННЫЙ (общая функция) ---
 export async function restoreRetiredItem(item, goList) {
   if (!confirm('Восстановить прибор из списанных?')) return;
-  // Проверяем, занят ли текущий ID в основном списке
   let newId = item.id;
   if (state.instruments.some((row) => String(row.id) === String(item.id))) {
-    newId = nextId(); // если занят, берём минимальный свободный
+    newId = nextId();
   }
-  // Удаляем из списанных
   state.retired = state.retired.filter((row) => row !== item);
-  // Создаём копию с новым ID, сбрасываем состояние
   const restored = {
     ...item,
     id: newId,
