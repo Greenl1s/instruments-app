@@ -99,43 +99,54 @@ export function renderCard(id, goList) {
   const isOwner = item.taken_by === state.currentUser.username;
   const isRetiredFlag = isRetired || item.condition === 'retired';
 
-  // --- Построение кнопок ---
-  let mainActions = '';
+  // === Формируем кнопки ===
+  let mainButtons = ''; // первая строка (для всех)
+  let adminButtons = ''; // вторая строка (только админ)
+
   if (isRetiredFlag) {
-    // Списанный прибор
-    mainActions += '<button class="secondary" data-qr>QR</button>';
-    mainActions += '<button class="secondary" data-copy>Копировать</button>';
+    // Списанный прибор – только QR, Копировать, Восстановить (админ)
+    mainButtons += '<button class="secondary" data-qr>QR</button>';
+    mainButtons += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
-      mainActions += '<button class="primary" data-restore>Восстановить</button>';
+      mainButtons += '<button class="primary" data-restore>Восстановить</button>';
     }
   } else {
     // Не списан
     if (!isTaken) {
-      mainActions += '<button class="primary" data-issue>Взять</button>';
+      mainButtons += '<button class="primary" data-issue>Взять</button>';
     } else if (isTaken && (isOwner || isAdmin)) {
-      mainActions += '<button class="primary" data-return>Вернуть</button>';
-      if (isOwner) mainActions += '<button class="secondary" data-transfer>Передать</button>';
+      mainButtons += '<button class="primary" data-return>Вернуть</button>';
+      if (isOwner) mainButtons += '<button class="secondary" data-transfer>Передать</button>';
     }
-    mainActions += '<button class="secondary" data-qr>QR</button>';
-    mainActions += '<button class="secondary" data-copy>Копировать</button>';
+    mainButtons += '<button class="secondary" data-qr>QR</button>';
+    mainButtons += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
-      mainActions += '<button class="secondary" data-edit>Редактировать</button>';
+      mainButtons += '<button class="secondary" data-edit>Редактировать</button>';
+    }
+    // Кнопки для админа во второй строке
+    if (isAdmin) {
+      adminButtons += '<button class="danger" data-retire>Списать</button>';
+      adminButtons += '<button class="danger" data-delete>Удалить</button>';
     }
   }
 
-  let adminActions = '';
-  if (isAdmin && !isRetiredFlag) {
-    adminActions = '<button class="danger" data-retire>Списать</button><button class="danger" data-delete>Удалить</button>';
-  }
-
-  // Кнопка "К списку" всегда справа внизу
+  // Кнопка "К списку" всегда в правом нижнем углу
   const backButton = '<button class="secondary" data-back>К списку</button>';
 
-  // Формируем HTML кнопок
-  let actionsHtml = '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">' + mainActions + '</div>';
-  if (adminActions) {
-    actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">' + adminActions + '<span style="flex:1"></span>' + backButton + '</div>';
+  // Собираем HTML
+  let actionsHtml = '';
+  if (mainButtons) {
+    actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">' + mainButtons + '</div>';
+  }
+  if (adminButtons) {
+    // Вторая строка – админские кнопки, а справа – "К списку"
+    actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">' +
+      adminButtons +
+      '<span style="flex:1"></span>' + // отодвигает "К списку" вправо
+      backButton +
+      '</div>';
   } else {
+    // Если нет админских кнопок – просто "К списку" справа
     actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; justify-content:flex-end;">' + backButton + '</div>';
   }
 
