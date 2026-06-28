@@ -145,7 +145,7 @@ export function showInstrumentForm(item = null) {
     input('valid_until', 'Действительно до', v.valid_until, 'date') +
     input('document_url', 'Ссылка на документ', v.document_url, 'url') +
     select('condition', 'Состояние', v.condition, [['free', 'Свободен'], ['busy', 'Занят'], ['retired', 'Списан']]) +
-    '<div class="modal-actions"><button class="secondary" type="button" data-close>Отмена</button><button class="primary" type="submit">Сохранить</button></div></form>');
+    '<div class="modal-actions"><button class="primary" type="submit">Сохранить</button></div></form>');
   $('instrumentForm').onsubmit = async (event) => {
     event.preventDefault();
     const data = formData(event.target);
@@ -167,7 +167,7 @@ function showTakeForm(item) {
     input('taken_where', 'Место использования', item.taken_where) +
     input('taken_extra', 'Доп.данные (телефон, email и т.д.)', item.taken_extra) +
     input('taken_date', 'Дата', today(), 'date') +
-    '<div class="modal-actions"><button class="secondary" type="button" data-close>Отмена</button><button class="primary" type="submit">Взять</button></div></form>');
+    '<div class="modal-actions"><button class="primary" type="submit">Взять</button></div></form>');
   $('takeForm').onsubmit = async (event) => {
     event.preventDefault();
     const data = formData(event.target);
@@ -201,7 +201,7 @@ function showTransferForm(item) {
     select('taken_by', 'Новый пользователь', '', state.users.filter((u) => u.username !== item.taken_by).map((u) => [u.username, u.username])) +
     input('taken_where', 'Место использования', item.taken_where) +
     input('taken_extra', 'Доп.данные', item.taken_extra) +
-    '<div class="modal-actions"><button class="secondary" type="button" data-close>Отмена</button><button class="primary" type="submit">Передать</button></div></form>');
+    '<div class="modal-actions"><button class="primary" type="submit">Передать</button></div></form>');
   $('transferForm').onsubmit = async (event) => {
     event.preventDefault();
     closeHistoryEntry(item, state.currentUser.username);
@@ -224,10 +224,12 @@ async function retireInstrument(item, goList) {
   goList();
 }
 
-// --- ВОССТАНОВИТЬ ---
+// --- ВОССТАНОВИТЬ СПИСАННЫЙ ---
 async function restoreInstrument(item, goList) {
   if (!confirm('Восстановить прибор из списанных?')) return;
+  // Удаляем из retired
   state.retired = state.retired.filter((row) => row !== item);
+  // Добавляем обратно в instruments, сбрасываем состояние на свободен
   item.condition = 'free';
   item.taken_by = '';
   item.taken_where = '';
@@ -251,7 +253,7 @@ function showQr(item) {
   const url = location.origin + location.pathname + '?id=' + encodeURIComponent(item.id);
   openModal('QR-код',
     '<div id="qrBox"></div><p>' + escapeHtml(item.name) + '</p>' +
-    '<div class="modal-actions"><button class="primary" data-download-qr>Скачать</button><button class="secondary" data-close>Закрыть</button></div>');
+    '<div class="modal-actions"><button class="primary" data-download-qr>Скачать</button></div>');
   new QRCode($('qrBox'), { text: url, width: 220, height: 220 });
   document.querySelector('[data-download-qr]').onclick = () => downloadQr(item);
 }
