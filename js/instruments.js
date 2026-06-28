@@ -60,6 +60,16 @@ export function renderRow(item) {
     '<span class="badge ' + conditionBadge(item.condition) + '">' + conditionText(item.condition) + '</span></div></a>';
 }
 
+export function renderRetiredRow(item) {
+  const isAdmin = state.currentUser.role === 'admin';
+  return '<div class="row panel">' +
+    '<div><div class="row-title">#' + escapeHtml(item.id) + ' ' + escapeHtml(item.name || 'Без названия') + '</div>' +
+    '<div class="row-subtitle">' + escapeHtml(item.model || 'Модель не указана') + ' · ' + escapeHtml(item.serial_number || 'Серийный номер не указан') + '</div></div>' +
+    '<div class="badges">' +
+    (isAdmin ? '<button class="primary" data-restore-id="' + escapeAttr(item.id) + '">Восстановить</button>' : '') +
+    '</div></div>';
+}
+
 export function renderList(openCard) {
   sortInstruments();
   const list = filteredInstruments();
@@ -71,7 +81,6 @@ export function renderList(openCard) {
 }
 
 export function renderCard(id, goList) {
-  // Сначала ищем в основном списке, потом в списанных
   let item = state.instruments.find((i) => String(i.id) === String(id));
   let isRetired = false;
   if (!item) {
@@ -131,7 +140,7 @@ function bindCardActions(item, goList, isRetired) {
   b('[data-transfer]', () => showTransferForm(item));
   b('[data-edit]', () => showInstrumentForm(item));
   b('[data-retire]', () => retireInstrument(item, goList));
-  b('[data-restore]', () => restoreInstrument(item, goList));
+  b('[data-restore]', () => restoreRetiredItem(item, goList));
   b('[data-delete]', () => deleteInstrument(item, goList));
   b('[data-qr]', () => showQr(item));
   b('[data-copy]', () => copyInfo(item));
@@ -230,8 +239,8 @@ async function retireInstrument(item, goList) {
   goList();
 }
 
-// --- ВОССТАНОВИТЬ СПИСАННЫЙ ---
-async function restoreInstrument(item, goList) {
+// --- ВОССТАНОВИТЬ СПИСАННЫЙ (общая функция) ---
+export async function restoreRetiredItem(item, goList) {
   if (!confirm('Восстановить прибор из списанных?')) return;
   // Проверяем, занят ли текущий ID в основном списке
   let newId = item.id;
@@ -250,10 +259,11 @@ async function restoreInstrument(item, goList) {
     taken_extra: '',
     taken_date: ''
   };
-  delete restored.retired_date; // удаляем поле, которое есть только в списанных
+  delete restored.retired_date;
   state.instruments.push(restored);
   await saveWorkbook('Прибор восстановлен');
-  goList();
+  if (goList) goList();
+  else window.dispatchEvent(new Event('app:refresh-route'));
 }
 
 // --- УДАЛИТЬ ---
