@@ -98,7 +98,6 @@ function showRetired() {
     html = state.retired.map(renderRetiredRow).join('');
   }
   openModal('Списанные приборы', '<div class="list">' + html + '</div>');
-  // Привязываем обработчики для кнопок восстановления
   if (isAdmin) {
     document.querySelectorAll('[data-restore-id]').forEach((btn) => {
       btn.onclick = async (e) => {
@@ -106,7 +105,6 @@ function showRetired() {
         const item = state.retired.find((i) => String(i.id) === String(id));
         if (!item) return toast('Прибор не найден', true);
         await restoreRetiredItem(item);
-        // Обновляем список списанных после восстановления
         showRetired();
       };
     });
