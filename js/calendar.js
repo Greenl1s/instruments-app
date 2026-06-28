@@ -64,12 +64,10 @@ export function showCalendar() {
   openModal('Календарь поверок', content);
 
   const modal = document.getElementById('modal');
-  const prevBtn = modal.querySelector('[data-cal-prev]');
-  const nextBtn = modal.querySelector('[data-cal-next]');
+  const head = modal.querySelector('.modal-head');
 
   function updateCalendar() {
     const body = modal.querySelector('.modal-body');
-    const head = body.querySelector('.modal-head');
     const children = body.children;
     for (let i = children.length - 1; i >= 0; i--) {
       if (children[i] !== head) children[i].remove();
