@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { $ } from './utils.js';
 import { loadWorkbook } from './excel.js';
 import { ensureDefaultAdmin, login, logout, readSession, showUserForm, showUsersManager } from './auth.js';
-import { renderCard, renderList, showInstrumentForm } from './instruments.js';
+import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRetiredItem } from './instruments.js';
 import { showCalendar } from './calendar.js';
 import { renderRow } from './instruments.js';
 import { openModal, toast } from './ui.js';
@@ -90,8 +90,25 @@ function goList() {
 }
 
 function showRetired() {
-  const html = state.retired.length
-    ? state.retired.map(renderRow).join('')
-    : '<div class="panel card">Списанных приборов нет</div>';
+  const isAdmin = state.currentUser.role === 'admin';
+  let html = '';
+  if (!state.retired.length) {
+    html = '<div class="panel card">Списанных приборов нет</div>';
+  } else {
+    html = state.retired.map(renderRetiredRow).join('');
+  }
   openModal('Списанные приборы', '<div class="list">' + html + '</div>');
+  // Привязываем обработчики для кнопок восстановления
+  if (isAdmin) {
+    document.querySelectorAll('[data-restore-id]').forEach((btn) => {
+      btn.onclick = async (e) => {
+        const id = btn.dataset.restoreId;
+        const item = state.retired.find((i) => String(i.id) === String(id));
+        if (!item) return toast('Прибор не найден', true);
+        await restoreRetiredItem(item);
+        // Обновляем список списанных после восстановления
+        showRetired();
+      };
+    });
+  }
 }
