@@ -71,7 +71,13 @@ export function renderList(openCard) {
 }
 
 export function renderCard(id, goList) {
-  const item = state.instruments.find((i) => String(i.id) === String(id));
+  // Сначала ищем в основном списке, потом в списанных
+  let item = state.instruments.find((i) => String(i.id) === String(id));
+  let isRetired = false;
+  if (!item) {
+    item = state.retired.find((i) => String(i.id) === String(id));
+    isRetired = true;
+  }
   $('listScreen').classList.add('hidden');
   $('cardScreen').classList.remove('hidden');
   if (!item) {
@@ -82,7 +88,7 @@ export function renderCard(id, goList) {
   const isAdmin = state.currentUser.role === 'admin';
   const isTaken = Boolean(item.taken_by);
   const isOwner = item.taken_by === state.currentUser.username;
-  const isRetired = item.condition === 'retired';
+  const isRetiredFlag = isRetired || item.condition === 'retired';
 
   $('cardScreen').innerHTML =
     '<article class="panel card"><h1>' + escapeHtml(item.name || 'Без названия') + '</h1>' +
@@ -99,21 +105,21 @@ export function renderCard(id, goList) {
     '</div>' +
     (isTaken ? '<div class="issued">' + field('Кто взял', item.taken_by) + field('Место', item.taken_where) + field('Доп.данные', item.taken_extra) + field('Дата выдачи', item.taken_date) + '</div>' : '') +
     '<div class="actions">' +
-    (isRetired ? '' : (!isTaken ? '<button class="primary" data-issue>Взять</button>' : '')) +
-    (isRetired ? '' : (isTaken && (isOwner || isAdmin) ? '<button class="primary" data-return>Вернуть</button>' : '')) +
-    (isRetired ? '' : (isTaken && isOwner ? '<button class="secondary" data-transfer>Передать</button>' : '')) +
-    (isAdmin && !isRetired ? '<button class="secondary" data-edit>Редактировать</button><button class="danger" data-retire>Списать</button>' : '') +
-    (isAdmin && isRetired ? '<button class="primary" data-restore>Восстановить</button>' : '') +
-    (isAdmin && !isRetired ? '<button class="danger" data-delete>Удалить</button>' : '') +
+    (isRetiredFlag ? '' : (!isTaken ? '<button class="primary" data-issue>Взять</button>' : '')) +
+    (isRetiredFlag ? '' : (isTaken && (isOwner || isAdmin) ? '<button class="primary" data-return>Вернуть</button>' : '')) +
+    (isRetiredFlag ? '' : (isTaken && isOwner ? '<button class="secondary" data-transfer>Передать</button>' : '')) +
+    (isAdmin && !isRetiredFlag ? '<button class="secondary" data-edit>Редактировать</button><button class="danger" data-retire>Списать</button>' : '') +
+    (isAdmin && isRetiredFlag ? '<button class="primary" data-restore>Восстановить</button>' : '') +
+    (isAdmin && !isRetiredFlag ? '<button class="danger" data-delete>Удалить</button>' : '') +
     '<button class="secondary" data-qr>QR</button>' +
     '<button class="secondary" data-copy>Копировать</button>' +
     '<button class="secondary" data-back>К списку</button>' +
     '</div></article>';
 
-  bindCardActions(item, goList);
+  bindCardActions(item, goList, isRetiredFlag);
 }
 
-function bindCardActions(item, goList) {
+function bindCardActions(item, goList, isRetired) {
   const root = $('cardScreen');
   const b = (s, fn) => {
     const n = root.querySelector(s);
@@ -227,15 +233,25 @@ async function retireInstrument(item, goList) {
 // --- ВОССТАНОВИТЬ СПИСАННЫЙ ---
 async function restoreInstrument(item, goList) {
   if (!confirm('Восстановить прибор из списанных?')) return;
-  // Удаляем из retired
+  // Проверяем, занят ли текущий ID в основном списке
+  let newId = item.id;
+  if (state.instruments.some((row) => String(row.id) === String(item.id))) {
+    newId = nextId(); // если занят, берём минимальный свободный
+  }
+  // Удаляем из списанных
   state.retired = state.retired.filter((row) => row !== item);
-  // Добавляем обратно в instruments, сбрасываем состояние на свободен
-  item.condition = 'free';
-  item.taken_by = '';
-  item.taken_where = '';
-  item.taken_extra = '';
-  item.taken_date = '';
-  state.instruments.push(item);
+  // Создаём копию с новым ID, сбрасываем состояние
+  const restored = {
+    ...item,
+    id: newId,
+    condition: 'free',
+    taken_by: '',
+    taken_where: '',
+    taken_extra: '',
+    taken_date: ''
+  };
+  delete restored.retired_date; // удаляем поле, которое есть только в списанных
+  state.instruments.push(restored);
   await saveWorkbook('Прибор восстановлен');
   goList();
 }
