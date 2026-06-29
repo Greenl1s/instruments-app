@@ -32,7 +32,6 @@ export async function saveWorkbook(message = 'Сохранено') {
   const wbout = XLSX.write(state.workbook, { bookType: 'xlsx', type: 'array' });
   console.log('saveWorkbook: размер данных для загрузки', wbout.length);
 
-  // Используем Blob для правильной передачи бинарных данных
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
   console.log('saveWorkbook: отправка запроса на /upload');
