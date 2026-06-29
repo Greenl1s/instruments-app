@@ -53,12 +53,12 @@ export async function saveWorkbook(message = 'Сохранено') {
     return;
   }
 
-  // Пытаемся прочитать JSON, если он есть
+  // Пытаемся прочитать JSON
   try {
     const result = await response.json();
     console.log('saveWorkbook: ответ сервера', result);
   } catch (e) {
-    // Если JSON нет, но статус 200 – тоже успех
+    // Если ответ не JSON, но статус 200 – всё равно успех
     if (response.ok) {
       console.log('saveWorkbook: сохранение успешно (не JSON ответ)');
     } else {
