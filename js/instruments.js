@@ -208,12 +208,15 @@ export function showInstrumentForm(item = null) {
   };
 }
 
+// --- ВЗЯТЬ ПРИБОР (с автоподстановкой extra из профиля) ---
 function showTakeForm(item) {
+  // Получаем дополнительную информацию из профиля текущего пользователя
+  const userExtra = state.currentUser?.extra || '';
   openModal('Взять прибор',
     '<form id="takeForm" class="form-grid">' +
     '<div class="field"><div class="field-label">Кто берет</div><div class="field-value">' + escapeHtml(state.currentUser.username) + '</div></div>' +
     input('taken_where', 'Место использования', item.taken_where) +
-    input('taken_extra', 'Доп. данные (телефон, email)', item.taken_extra || '') +
+    input('taken_extra', 'Доп. данные (из профиля)', userExtra) +
     input('taken_date', 'Дата', today(), 'date') +
     '<div class="modal-actions"><button class="primary" type="submit">Взять</button></div></form>');
   $('takeForm').onsubmit = async (event) => {
@@ -230,6 +233,7 @@ function showTakeForm(item) {
   };
 }
 
+// --- ВОЗВРАТ ---
 async function returnInstrument(item) {
   item.condition = 'free';
   closeHistoryEntry(item, state.currentUser.username);
@@ -241,6 +245,7 @@ async function returnInstrument(item) {
   window.dispatchEvent(new Event('app:refresh-route'));
 }
 
+// --- ПЕРЕДАЧА ---
 function showTransferForm(item) {
   openModal('Передать прибор',
     '<form id="transferForm" class="form-grid">' +
@@ -260,6 +265,7 @@ function showTransferForm(item) {
   };
 }
 
+// --- СПИСАТЬ ---
 async function retireInstrument(item, goList) {
   if (!confirm('Списать прибор?')) return;
   closeHistoryEntry(item, state.currentUser.username);
@@ -269,6 +275,7 @@ async function retireInstrument(item, goList) {
   goList();
 }
 
+// --- ВОССТАНОВИТЬ СПИСАННЫЙ (общая функция) ---
 export async function restoreRetiredItem(item, goList) {
   if (!confirm('Восстановить прибор из списанных?')) return;
   let newId = item.id;
@@ -292,6 +299,7 @@ export async function restoreRetiredItem(item, goList) {
   else window.dispatchEvent(new Event('app:refresh-route'));
 }
 
+// --- УДАЛИТЬ ---
 async function deleteInstrument(item, goList) {
   if (!confirm('Удалить прибор без переноса в списанные?')) return;
   state.instruments = state.instruments.filter((row) => row !== item);
@@ -299,6 +307,7 @@ async function deleteInstrument(item, goList) {
   goList();
 }
 
+// --- QR (с кнопкой скачивания) ---
 function showQr(item) {
   const url = location.origin + location.pathname + '?id=' + encodeURIComponent(item.id);
   openModal('QR-код',
@@ -322,6 +331,7 @@ function downloadQr(item) {
   a.remove();
 }
 
+// --- КОПИРОВАНИЕ ---
 async function copyInfo(item) {
   await navigator.clipboard.writeText(
     ['Название: ' + (item.name || '—'),
