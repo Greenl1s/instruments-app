@@ -99,49 +99,47 @@ export function renderCard(id, goList) {
   const isOwner = item.taken_by === state.currentUser.username;
   const isRetiredFlag = isRetired || item.condition === 'retired';
 
-  let mainButtons = '';
-  let adminButtons = '';
-
+  // --- Построение кнопок ---
+  let mainActions = '';
   if (isRetiredFlag) {
-    mainButtons += '<button class="secondary" data-qr>QR</button>';
-    mainButtons += '<button class="secondary" data-copy>Копировать</button>';
+    // Списанный прибор
+    mainActions += '<button class="secondary" data-qr>QR</button>';
+    mainActions += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
-      mainButtons += '<button class="primary" data-restore>Восстановить</button>';
+      mainActions += '<button class="primary" data-restore>Восстановить</button>';
     }
   } else {
+    // Не списан
     if (!isTaken) {
-      mainButtons += '<button class="primary" data-issue>Взять</button>';
+      mainActions += '<button class="primary" data-issue>Взять</button>';
     } else if (isTaken && (isOwner || isAdmin)) {
-      mainButtons += '<button class="primary" data-return>Вернуть</button>';
-      if (isOwner) mainButtons += '<button class="secondary" data-transfer>Передать</button>';
+      mainActions += '<button class="primary" data-return>Вернуть</button>';
+      if (isOwner) mainActions += '<button class="secondary" data-transfer>Передать</button>';
     }
-    mainButtons += '<button class="secondary" data-qr>QR</button>';
-    mainButtons += '<button class="secondary" data-copy>Копировать</button>';
+    mainActions += '<button class="secondary" data-qr>QR</button>';
+    mainActions += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
-      mainButtons += '<button class="secondary" data-edit>Редактировать</button>';
-    }
-    if (isAdmin) {
-      adminButtons += '<button class="danger" data-retire>Списать</button>';
-      adminButtons += '<button class="danger" data-delete>Удалить</button>';
+      mainActions += '<button class="secondary" data-edit>Редактировать</button>';
     }
   }
 
+  let adminActions = '';
+  if (isAdmin && !isRetiredFlag) {
+    adminActions = '<button class="danger" data-retire>Списать</button><button class="danger" data-delete>Удалить</button>';
+  }
+
+  // Кнопка "К списку" всегда справа внизу
   const backButton = '<button class="secondary" data-back>К списку</button>';
 
-  let actionsHtml = '';
-  if (mainButtons) {
-    actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">' + mainButtons + '</div>';
-  }
-  if (adminButtons) {
-    actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">' +
-      adminButtons +
-      '<span style="flex:1"></span>' +
-      backButton +
-      '</div>';
+  // Формируем HTML кнопок
+  let actionsHtml = '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">' + mainActions + '</div>';
+  if (adminActions) {
+    actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">' + adminActions + '<span style="flex:1"></span>' + backButton + '</div>';
   } else {
     actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; justify-content:flex-end;">' + backButton + '</div>';
   }
 
+  // Формируем карточку
   $('cardScreen').innerHTML =
     '<article class="panel card"><h1>' + escapeHtml(item.name || 'Без названия') + '</h1>' +
     '<div class="badges"><span class="badge ' + verificationBadge(item.valid_until) + '">' + verificationText(item.valid_until) + '</span>' +
@@ -208,13 +206,13 @@ export function showInstrumentForm(item = null) {
   };
 }
 
-// --- ВЗЯТЬ ПРИБОР (ДОБАВЛЕНО taken_extra) ---
+// --- ВЗЯТЬ ПРИБОР ---
 function showTakeForm(item) {
   openModal('Взять прибор',
     '<form id="takeForm" class="form-grid">' +
     '<div class="field"><div class="field-label">Кто берет</div><div class="field-value">' + escapeHtml(state.currentUser.username) + '</div></div>' +
     input('taken_where', 'Место использования', item.taken_where) +
-    input('taken_extra', 'Доп. данные (телефон, email)', item.taken_extra || '') +
+    input('taken_extra', 'Доп.данные (телефон, email и т.д.)', item.taken_extra) +
     input('taken_date', 'Дата', today(), 'date') +
     '<div class="modal-actions"><button class="primary" type="submit">Взять</button></div></form>');
   $('takeForm').onsubmit = async (event) => {
@@ -231,6 +229,7 @@ function showTakeForm(item) {
   };
 }
 
+// --- ВОЗВРАТ ---
 async function returnInstrument(item) {
   item.condition = 'free';
   closeHistoryEntry(item, state.currentUser.username);
@@ -242,12 +241,13 @@ async function returnInstrument(item) {
   window.dispatchEvent(new Event('app:refresh-route'));
 }
 
+// --- ПЕРЕДАЧА ---
 function showTransferForm(item) {
   openModal('Передать прибор',
     '<form id="transferForm" class="form-grid">' +
     select('taken_by', 'Новый пользователь', '', state.users.filter((u) => u.username !== item.taken_by).map((u) => [u.username, u.username])) +
     input('taken_where', 'Место использования', item.taken_where) +
-    input('taken_extra', 'Доп. данные', item.taken_extra || '') +
+    input('taken_extra', 'Доп.данные', item.taken_extra) +
     '<div class="modal-actions"><button class="primary" type="submit">Передать</button></div></form>');
   $('transferForm').onsubmit = async (event) => {
     event.preventDefault();
@@ -261,6 +261,7 @@ function showTransferForm(item) {
   };
 }
 
+// --- СПИСАТЬ ---
 async function retireInstrument(item, goList) {
   if (!confirm('Списать прибор?')) return;
   closeHistoryEntry(item, state.currentUser.username);
@@ -270,6 +271,7 @@ async function retireInstrument(item, goList) {
   goList();
 }
 
+// --- ВОССТАНОВИТЬ СПИСАННЫЙ (общая функция) ---
 export async function restoreRetiredItem(item, goList) {
   if (!confirm('Восстановить прибор из списанных?')) return;
   let newId = item.id;
@@ -293,6 +295,7 @@ export async function restoreRetiredItem(item, goList) {
   else window.dispatchEvent(new Event('app:refresh-route'));
 }
 
+// --- УДАЛИТЬ ---
 async function deleteInstrument(item, goList) {
   if (!confirm('Удалить прибор без переноса в списанные?')) return;
   state.instruments = state.instruments.filter((row) => row !== item);
@@ -300,6 +303,7 @@ async function deleteInstrument(item, goList) {
   goList();
 }
 
+// --- QR (с кнопкой скачивания) ---
 function showQr(item) {
   const url = location.origin + location.pathname + '?id=' + encodeURIComponent(item.id);
   openModal('QR-код',
@@ -323,6 +327,7 @@ function downloadQr(item) {
   a.remove();
 }
 
+// --- КОПИРОВАНИЕ ---
 async function copyInfo(item) {
   await navigator.clipboard.writeText(
     ['Название: ' + (item.name || '—'),
