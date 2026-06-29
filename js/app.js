@@ -4,7 +4,6 @@ import { loadWorkbook } from './excel.js';
 import { ensureDefaultAdmin, login, logout, readSession, showUserForm, showUsersManager } from './auth.js';
 import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRetiredItem } from './instruments.js';
 import { showCalendar } from './calendar.js';
-import { renderRow } from './instruments.js';
 import { openModal, toast } from './ui.js';
 
 document.addEventListener('DOMContentLoaded', init);
