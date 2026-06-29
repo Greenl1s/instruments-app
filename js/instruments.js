@@ -99,19 +99,17 @@ export function renderCard(id, goList) {
   const isOwner = item.taken_by === state.currentUser.username;
   const isRetiredFlag = isRetired || item.condition === 'retired';
 
-  // === Формируем кнопки ===
-  let mainButtons = ''; // первая строка (для всех)
-  let adminButtons = ''; // вторая строка (только админ)
+  // Формируем кнопки
+  let mainButtons = '';
+  let adminButtons = '';
 
   if (isRetiredFlag) {
-    // Списанный прибор – только QR, Копировать, Восстановить (админ)
     mainButtons += '<button class="secondary" data-qr>QR</button>';
     mainButtons += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
       mainButtons += '<button class="primary" data-restore>Восстановить</button>';
     }
   } else {
-    // Не списан
     if (!isTaken) {
       mainButtons += '<button class="primary" data-issue>Взять</button>';
     } else if (isTaken && (isOwner || isAdmin)) {
@@ -123,34 +121,28 @@ export function renderCard(id, goList) {
     if (isAdmin) {
       mainButtons += '<button class="secondary" data-edit>Редактировать</button>';
     }
-    // Кнопки для админа во второй строке
     if (isAdmin) {
       adminButtons += '<button class="danger" data-retire>Списать</button>';
       adminButtons += '<button class="danger" data-delete>Удалить</button>';
     }
   }
 
-  // Кнопка "К списку" всегда в правом нижнем углу
   const backButton = '<button class="secondary" data-back>К списку</button>';
 
-  // Собираем HTML
   let actionsHtml = '';
   if (mainButtons) {
     actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">' + mainButtons + '</div>';
   }
   if (adminButtons) {
-    // Вторая строка – админские кнопки, а справа – "К списку"
     actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">' +
       adminButtons +
-      '<span style="flex:1"></span>' + // отодвигает "К списку" вправо
+      '<span style="flex:1"></span>' +
       backButton +
       '</div>';
   } else {
-    // Если нет админских кнопок – просто "К списку" справа
     actionsHtml += '<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; justify-content:flex-end;">' + backButton + '</div>';
   }
 
-  // Формируем карточку
   $('cardScreen').innerHTML =
     '<article class="panel card"><h1>' + escapeHtml(item.name || 'Без названия') + '</h1>' +
     '<div class="badges"><span class="badge ' + verificationBadge(item.valid_until) + '">' + verificationText(item.valid_until) + '</span>' +
@@ -164,7 +156,7 @@ export function renderCard(id, goList) {
     field('Действительно до', item.valid_until) +
     field('Документ', item.document_url ? '<a href="' + escapeAttr(item.document_url) + '" target="_blank" rel="noopener">Открыть</a>' : '—', true) +
     '</div>' +
-    (isTaken ? '<div class="issued">' + field('Кто взял', item.taken_by) + field('Место', item.taken_where) + field('Доп.данные', item.taken_extra) + field('Дата выдачи', item.taken_date) + '</div>' : '') +
+    (isTaken ? '<div class="issued">' + field('Кто взял', item.taken_by) + field('Место', item.taken_where) + field('Дата выдачи', item.taken_date) + '</div>' : '') +
     actionsHtml +
     '</article>';
 
@@ -217,25 +209,27 @@ export function showInstrumentForm(item = null) {
   };
 }
 
-// --- ВЗЯТЬ ПРИБОР ---
+// --- ВЗЯТЬ ПРИБОР (без поля "Доп.данные") ---
 function showTakeForm(item) {
   openModal('Взять прибор',
     '<form id="takeForm" class="form-grid">' +
     '<div class="field"><div class="field-label">Кто берет</div><div class="field-value">' + escapeHtml(state.currentUser.username) + '</div></div>' +
     input('taken_where', 'Место использования', item.taken_where) +
-    input('taken_extra', 'Доп.данные (телефон, email и т.д.)', item.taken_extra) +
     input('taken_date', 'Дата', today(), 'date') +
     '<div class="modal-actions"><button class="primary" type="submit">Взять</button></div></form>');
   $('takeForm').onsubmit = async (event) => {
     event.preventDefault();
     const data = formData(event.target);
+    // Сохраняем данные в прибор
     Object.assign(item, data, {
       taken_by: state.currentUser.username,
-      condition: 'busy'
+      condition: 'busy',
+      taken_extra: '' // очищаем поле, если оно было
     });
     addHistoryEntry(item);
     closeModal();
     await saveWorkbook('Прибор взят');
+    // Обновляем интерфейс
     window.dispatchEvent(new Event('app:refresh-route'));
   };
 }
@@ -258,13 +252,12 @@ function showTransferForm(item) {
     '<form id="transferForm" class="form-grid">' +
     select('taken_by', 'Новый пользователь', '', state.users.filter((u) => u.username !== item.taken_by).map((u) => [u.username, u.username])) +
     input('taken_where', 'Место использования', item.taken_where) +
-    input('taken_extra', 'Доп.данные', item.taken_extra) +
     '<div class="modal-actions"><button class="primary" type="submit">Передать</button></div></form>');
   $('transferForm').onsubmit = async (event) => {
     event.preventDefault();
     closeHistoryEntry(item, state.currentUser.username);
     const data = formData(event.target);
-    Object.assign(item, data, { taken_date: today(), condition: 'busy' });
+    Object.assign(item, data, { taken_date: today(), condition: 'busy', taken_extra: '' });
     addHistoryEntry(item);
     closeModal();
     await saveWorkbook('Прибор передан');
