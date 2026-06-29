@@ -16,7 +16,12 @@ export function login(username, password) {
   password = String(password || '').trim();
   const user = state.users.find((u) => String(u.username || '').trim() === username && String(u.password || '').trim() === password);
   if (!user) return false;
-  state.currentUser = { username: String(user.username).trim(), role: user.role === 'admin' ? 'admin' : 'employee' };
+  // Сохраняем в сессию все поля пользователя, включая extra
+  state.currentUser = {
+    username: String(user.username).trim(),
+    role: user.role === 'admin' ? 'admin' : 'employee',
+    extra: user.extra || '' // добавляем дополнительную информацию
+  };
   sessionStorage.setItem('instrumentUser', JSON.stringify(state.currentUser));
   return true;
 }
@@ -51,6 +56,11 @@ export function showUserForm(user = null, afterSave = () => {}) {
     else state.users.push(data);
     closeModal();
     await saveWorkbook('Пользователь сохранен');
+    // Если редактируем себя – обновляем сессию
+    if (state.currentUser && state.currentUser.username === data.username) {
+      state.currentUser.extra = data.extra;
+      sessionStorage.setItem('instrumentUser', JSON.stringify(state.currentUser));
+    }
     afterSave();
   };
 }
