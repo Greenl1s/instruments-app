@@ -46,19 +46,16 @@ export async function saveWorkbook(message = 'Сохранено') {
     throw new Error('Не удалось сохранить Excel-файл: ' + response.status + ' ' + errorText);
   }
 
-  // Если Worker вернул 204, просто считаем это успехом
   if (response.status === 204) {
     console.log('saveWorkbook: сохранение успешно (204)');
     setSync(message);
     return;
   }
 
-  // Пытаемся прочитать JSON
   try {
     const result = await response.json();
     console.log('saveWorkbook: ответ сервера', result);
   } catch (e) {
-    // Если ответ не JSON, но статус 200 – всё равно успех
     if (response.ok) {
       console.log('saveWorkbook: сохранение успешно (не JSON ответ)');
     } else {
