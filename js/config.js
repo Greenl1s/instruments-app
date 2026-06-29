@@ -1,6 +1,6 @@
 export const CONFIG = {
   proxyUrl: 'https://autumn-queen-abbe.kirik7061.workers.dev',
-  publicKey: 'https://disk.yandex.ru/i/kAXYp4XPyNJAWg',
+  publicKey: 'https://disk.yandex.ru/i/4YzMd8kJ_-TFTw',
   writeSecret: 'mySecretKey123'
 };
 
