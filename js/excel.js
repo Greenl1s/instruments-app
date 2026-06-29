@@ -30,11 +30,8 @@ export async function saveWorkbook(message = 'Сохранено') {
   writeSheet(SHEETS.retired, HEADERS.retired, state.retired);
 
   const wbout = XLSX.write(state.workbook, { bookType: 'xlsx', type: 'array' });
-  console.log('saveWorkbook: размер данных для загрузки', wbout.length);
-
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
-  console.log('saveWorkbook: отправка запроса на /upload');
   const response = await fetch(apiUrl('/upload'), {
     method: 'PUT',
     headers: {
@@ -49,8 +46,25 @@ export async function saveWorkbook(message = 'Сохранено') {
     throw new Error('Не удалось сохранить Excel-файл: ' + response.status + ' ' + errorText);
   }
 
-  const result = await response.json();
-  console.log('saveWorkbook: ответ сервера', result);
+  // Если Worker вернул 204, просто считаем это успехом
+  if (response.status === 204) {
+    console.log('saveWorkbook: сохранение успешно (204)');
+    setSync(message);
+    return;
+  }
+
+  // Пытаемся прочитать JSON, если он есть
+  try {
+    const result = await response.json();
+    console.log('saveWorkbook: ответ сервера', result);
+  } catch (e) {
+    // Если JSON нет, но статус 200 – тоже успех
+    if (response.ok) {
+      console.log('saveWorkbook: сохранение успешно (не JSON ответ)');
+    } else {
+      throw e;
+    }
+  }
   setSync(message);
 }
 
