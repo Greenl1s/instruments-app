@@ -29,17 +29,18 @@ export function logout() {
 export async function ensureDefaultAdmin() {
   const hasAdmin = state.users.some((u) => String(u.username || '').trim() === 'admin');
   if (hasAdmin) return;
-  state.users.unshift({ username: 'admin', password: 'admin', role: 'admin' });
+  state.users.unshift({ username: 'admin', password: 'admin', role: 'admin', extra: '' });
   await saveWorkbook('Добавлен пользователь admin/admin');
 }
 
 export function showUserForm(user = null, afterSave = () => {}) {
-  const values = user || { role: 'employee' };
+  const values = user || { role: 'employee', extra: '' };
   openModal(user ? 'Изменить пользователя' : 'Добавить пользователя',
     '<form id="userForm" class="form-grid">' +
     input('username', 'Логин', values.username, 'text', true) +
     input('password', 'Пароль', values.password, 'text', true) +
     select('role', 'Роль', values.role, [['employee', 'Пользователь'], ['admin', 'Администратор']]) +
+    input('extra', 'Доп. информация (телефон, email и т.д.)', values.extra, 'text') +
     '<div class="modal-actions"><button class="primary" type="submit">Сохранить</button></div></form>'
   );
   $('userForm').onsubmit = async (event) => {
@@ -56,7 +57,7 @@ export function showUserForm(user = null, afterSave = () => {}) {
 
 export function showUsersManager() {
   const rows = state.users.map((u) =>
-    '<div class="row"><div><b>' + u.username + '</b><div class="row-subtitle">' + (u.role === 'admin' ? 'Администратор' : 'Пользователь') + '</div></div>' +
+    '<div class="row"><div><b>' + u.username + '</b><div class="row-subtitle">' + (u.role === 'admin' ? 'Администратор' : 'Пользователь') + (u.extra ? ' · ' + u.extra : '') + '</div></div>' +
     '<div class="badges"><button class="secondary" data-edit-user="' + u.username + '">Изменить</button>' +
     '<button class="danger" data-delete-user="' + u.username + '">Удалить</button></div></div>'
   ).join('');
