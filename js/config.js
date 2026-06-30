@@ -1,5 +1,5 @@
 export const CONFIG = {
-  proxyUrl: 'https://prox-cstroy-quo5ifxwk-greenl1s-projects.vercel.app',
+  proxyUrl: 'https://prox-cstroy-greenl1s-projects.vercel.app',
   publicKey: 'https://disk.yandex.ru/i/9I0tM3vUUpphDw',
   writeSecret: 'mySecretKey123',
   filePath: '/Учет.xlsx'
