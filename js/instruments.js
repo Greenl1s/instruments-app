@@ -66,7 +66,7 @@ export function renderRetiredRow(item) {
     '<div><div class="row-title">#' + escapeHtml(item.id) + ' ' + escapeHtml(item.name || 'Без названия') + '</div>' +
     '<div class="row-subtitle">' + escapeHtml(item.model || 'Модель не указана') + ' · ' + escapeHtml(item.serial_number || 'Серийный номер не указан') + '</div></div>' +
     '<div class="badges">' +
-    (isAdmin ? '<button class="primary" data-restore-id="' + escapeAttr(item.id) + '">Восстановить</button>' : '') +
+    (isAdmin ? '<button class="secondary" data-open-retired-id="' + escapeAttr(item.id) + '">Открыть карточку</button><button class="primary" data-restore-id="' + escapeAttr(item.id) + '">Восстановить</button>' : '') +
     '</div></div>';
 }
 
@@ -208,9 +208,8 @@ export function showInstrumentForm(item = null) {
   };
 }
 
-// --- ВЗЯТЬ ПРИБОР (с автоподстановкой extra из профиля) ---
+// --- ВЗЯТЬ ПРИБОР ---
 function showTakeForm(item) {
-  // Получаем дополнительную информацию из профиля текущего пользователя
   const userExtra = state.currentUser?.extra || '';
   openModal('Взять прибор',
     '<form id="takeForm" class="form-grid">' +
@@ -265,24 +264,55 @@ function showTransferForm(item) {
   };
 }
 
-// --- СПИСАТЬ ---
+// --- СПИСАТЬ (с изменением ID) ---
 async function retireInstrument(item, goList) {
   if (!confirm('Списать прибор?')) return;
+  // Закрываем историю выдачи
   closeHistoryEntry(item, state.currentUser.username);
-  state.retired.push({ ...item, condition: 'retired', retired_date: today() });
+  
+  // Изменяем ID, добавляя ведущий ноль (если его ещё нет)
+  let newId = String(item.id);
+  if (!newId.startsWith('0')) {
+    newId = '0' + newId;
+  }
+  // Проверяем, чтобы новый ID не совпадал с существующим в retired
+  // (хотя мы добавляем ноль, это может быть уникально)
+  // Если такой ID уже есть в retired, можно добавить ещё один ноль, но пока просто используем как есть
+  
+  // Создаём копию прибора с новым ID и статусом retired
+  const retiredItem = {
+    ...item,
+    id: newId,
+    condition: 'retired',
+    retired_date: today()
+  };
+  state.retired.push(retiredItem);
+  // Удаляем из основного списка
   state.instruments = state.instruments.filter((row) => row !== item);
   await saveWorkbook('Прибор списан');
   goList();
 }
 
-// --- ВОССТАНОВИТЬ СПИСАННЫЙ (общая функция) ---
+// --- ВОССТАНОВИТЬ СПИСАННЫЙ ---
 export async function restoreRetiredItem(item, goList) {
   if (!confirm('Восстановить прибор из списанных?')) return;
-  let newId = item.id;
-  if (state.instruments.some((row) => String(row.id) === String(item.id))) {
-    newId = nextId();
+  
+  // Убираем ведущий ноль из ID, если он есть
+  let originalId = String(item.id);
+  if (originalId.startsWith('0')) {
+    originalId = originalId.slice(1); // убираем первый символ
   }
+  
+  // Проверяем, занят ли этот ID в основном списке
+  let newId = originalId;
+  if (state.instruments.some((row) => String(row.id) === newId)) {
+    newId = nextId(); // если занят, берём минимальный свободный
+  }
+  
+  // Удаляем из retired
   state.retired = state.retired.filter((row) => row !== item);
+  
+  // Создаём восстановленный прибор
   const restored = {
     ...item,
     id: newId,
