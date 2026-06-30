@@ -98,7 +98,6 @@ function showRetired() {
   }
   openModal('Списанные приборы', '<div class="list">' + html + '</div>');
   if (isAdmin) {
-    // Восстановление
     document.querySelectorAll('[data-restore-id]').forEach((btn) => {
       btn.onclick = async (e) => {
         const id = btn.dataset.restoreId;
@@ -108,13 +107,11 @@ function showRetired() {
         showRetired();
       };
     });
-    // Открыть карточку (исправлено)
     document.querySelectorAll('[data-open-retired-id]').forEach((btn) => {
       btn.onclick = (e) => {
         const id = btn.dataset.openRetiredId;
-        closeModal(); // закрываем модалку со списком
-        history.pushState(null, '', '?id=' + encodeURIComponent(id));
-        renderRoute(); // перерисовываем маршрут
+        closeModal(); // закрываем модалку
+        openCard(id); // открываем карточку
       };
     });
   }
