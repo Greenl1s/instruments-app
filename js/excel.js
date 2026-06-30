@@ -9,7 +9,6 @@ export async function loadWorkbook() {
   
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
   
-  // 1. Получаем ссылку на скачивание через прокси
   const yandexApiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=' + CONFIG.publicKey;
   const apiRequestUrl = proxyBase + '?url=' + encodeURIComponent(yandexApiUrl);
   console.log('[loadWorkbook] URL запроса к API:', apiRequestUrl);
@@ -23,7 +22,6 @@ export async function loadWorkbook() {
     throw new Error('API не вернул ссылку на файл');
   }
   
-  // 2. Скачиваем файл ЧЕРЕЗ ТОТ ЖЕ ПРОКСИ
   const fileRequestUrl = proxyBase + '?url=' + encodeURIComponent(data.href);
   console.log('[loadWorkbook] URL запроса к файлу (через прокси):', fileRequestUrl);
   
@@ -32,10 +30,23 @@ export async function loadWorkbook() {
     throw new Error('Не удалось скачать файл. Статус: ' + fileResponse.status);
   }
   
-  const blob = await fileResponse.blob();
-  console.log('[loadWorkbook] Размер файла:', blob.size, 'байт');
+  // Проверяем Content-Type и размер
+  const contentType = fileResponse.headers.get('content-type');
+  console.log('[loadWorkbook] Content-Type:', contentType);
+  const arrayBuffer = await fileResponse.arrayBuffer();
+  console.log('[loadWorkbook] Размер файла:', arrayBuffer.byteLength, 'байт');
   
-  state.workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+  if (arrayBuffer.byteLength === 0) {
+    throw new Error('Скачан пустой файл');
+  }
+  
+  try {
+    state.workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  } catch (readError) {
+    console.error('[loadWorkbook] Ошибка чтения Excel:', readError);
+    throw new Error('Не удалось прочитать Excel-файл. Возможно, файл повреждён.');
+  }
+  
   state.instruments = readSheet(SHEETS.instruments, HEADERS.instruments);
   state.history = readSheet(SHEETS.history, HEADERS.history);
   state.users = readSheet(SHEETS.users, HEADERS.users);
@@ -53,8 +64,13 @@ export async function saveWorkbook(message = 'Сохранено') {
   writeSheet(SHEETS.users, HEADERS.users, state.users);
   writeSheet(SHEETS.retired, HEADERS.retired, state.retired);
 
+  // Сохраняем workbook в массив байт
   const wbout = XLSX.write(state.workbook, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  console.log('saveWorkbook: размер данных для загрузки', wbout.length);
+  
+  if (wbout.length === 0) {
+    throw new Error('Получены пустые данные для сохранения');
+  }
 
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
   
@@ -81,7 +97,7 @@ export async function saveWorkbook(message = 'Сохранено') {
       'X-Write-Secret': CONFIG.writeSecret,
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     },
-    body: blob
+    body: Buffer.from(wbout) // Явно передаём Buffer
   });
   if (!putResponse.ok) {
     throw new Error('Не удалось сохранить Excel-файл');
