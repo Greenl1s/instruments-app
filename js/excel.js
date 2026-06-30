@@ -11,7 +11,7 @@ export async function loadWorkbook() {
   
   // 1. Получаем ссылку на скачивание через прокси
   const yandexApiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=' + CONFIG.publicKey;
-  const apiRequestUrl = proxyBase + '?url=' + encodeURIComponent(yandexApiUrl);
+  const apiRequestUrl = proxyBase + '/download?public_key=' + encodeURIComponent(CONFIG.publicKey);
   console.log('[loadWorkbook] URL запроса к API:', apiRequestUrl);
   
   const apiResponse = await fetch(apiRequestUrl);
@@ -23,31 +23,23 @@ export async function loadWorkbook() {
     throw new Error('API не вернул ссылку на файл');
   }
   
-  // 2. Скачиваем файл через прокси с помощью ArrayBuffer
-  const fileRequestUrl = proxyBase + '?url=' + encodeURIComponent(data.href);
-  console.log('[loadWorkbook] URL запроса к файлу (через прокси):', fileRequestUrl);
+  // 2. Скачиваем файл через ТОТ ЖЕ ПРОКСИ (используем /download с параметром public_key)
+  // Но проще использовать универсальный метод с ?url=
+  const fileRequestUrl = proxyBase + '/download?public_key=' + encodeURIComponent(CONFIG.publicKey);
+  // Но это вернёт JSON с href, а нам нужно скачать файл.
+  // Поэтому используем прямой запрос к файлу через прокси с ?url=
+  const directFileUrl = proxyBase + '?url=' + encodeURIComponent(data.href);
+  console.log('[loadWorkbook] URL запроса к файлу (через прокси):', directFileUrl);
   
-  const fileResponse = await fetch(fileRequestUrl);
+  const fileResponse = await fetch(directFileUrl);
   if (!fileResponse.ok) {
     throw new Error('Не удалось скачать файл. Статус: ' + fileResponse.status);
   }
   
-  const arrayBuffer = await fileResponse.arrayBuffer();
-  console.log('[loadWorkbook] Размер ArrayBuffer:', arrayBuffer.byteLength, 'байт');
+  const blob = await fileResponse.blob();
+  console.log('[loadWorkbook] Размер файла:', blob.size, 'байт');
   
-  // Если файл пустой или повреждён – создаём новый
-  if (arrayBuffer.byteLength === 0) {
-    console.warn('[loadWorkbook] Файл пустой, создаю новый');
-    state.workbook = XLSX.utils.book_new();
-  } else {
-    try {
-      state.workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    } catch (e) {
-      console.error('[loadWorkbook] Ошибка чтения файла:', e);
-      throw new Error('Файл повреждён. Попробуйте заменить его на Яндекс.Диске.');
-    }
-  }
-  
+  state.workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
   state.instruments = readSheet(SHEETS.instruments, HEADERS.instruments);
   state.history = readSheet(SHEETS.history, HEADERS.history);
   state.users = readSheet(SHEETS.users, HEADERS.users);
