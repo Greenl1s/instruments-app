@@ -1,6 +1,6 @@
 export const CONFIG = {
   proxyUrl: 'https://autumn-queen-abbe.kirik7061.workers.dev',
-  publicKey: 'https://disk.yandex.ru/i/9I0tM3vUUpphDw',
+  publicKey: 'https://disk.yandex.ru/i/jU1KxLsivSfagA',
   writeSecret: 'mySecretKey123',
   filePath: '/Учёт.xlsx'
 };
