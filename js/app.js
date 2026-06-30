@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { $ } from './utils.js';
 import { loadWorkbook } from './excel.js';
 import { ensureDefaultAdmin, login, logout, readSession, showUserForm, showUsersManager } from './auth.js';
-import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRetiredItem } from './instruments.js';
+import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRetiredItem, openCard as openCardFunc } from './instruments.js';
 import { showCalendar } from './calendar.js';
 import { openModal, toast } from './ui.js';
 
@@ -98,6 +98,7 @@ function showRetired() {
   }
   openModal('Списанные приборы', '<div class="list">' + html + '</div>');
   if (isAdmin) {
+    // Обработчики для кнопок "Восстановить"
     document.querySelectorAll('[data-restore-id]').forEach((btn) => {
       btn.onclick = async (e) => {
         const id = btn.dataset.restoreId;
@@ -105,6 +106,14 @@ function showRetired() {
         if (!item) return toast('Прибор не найден', true);
         await restoreRetiredItem(item);
         showRetired();
+      };
+    });
+    // Обработчики для кнопок "Открыть карточку"
+    document.querySelectorAll('[data-open-retired-id]').forEach((btn) => {
+      btn.onclick = (e) => {
+        const id = btn.dataset.openRetiredId;
+        closeModal(); // закрываем модалку со списком списанных
+        openCard(id); // переходим на карточку прибора
       };
     });
   }
