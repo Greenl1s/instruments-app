@@ -81,8 +81,10 @@ export function renderList(openCard) {
 }
 
 export function renderCard(id, goList) {
+  // Ищем прибор в основном списке
   let item = state.instruments.find((i) => String(i.id) === String(id));
   let isRetired = false;
+  // Если не нашли – ищем в списанных
   if (!item) {
     item = state.retired.find((i) => String(i.id) === String(id));
     isRetired = true;
@@ -267,19 +269,11 @@ function showTransferForm(item) {
 // --- СПИСАТЬ (с изменением ID) ---
 async function retireInstrument(item, goList) {
   if (!confirm('Списать прибор?')) return;
-  // Закрываем историю выдачи
   closeHistoryEntry(item, state.currentUser.username);
-  
-  // Изменяем ID, добавляя ведущий ноль (если его ещё нет)
   let newId = String(item.id);
   if (!newId.startsWith('0')) {
     newId = '0' + newId;
   }
-  // Проверяем, чтобы новый ID не совпадал с существующим в retired
-  // (хотя мы добавляем ноль, это может быть уникально)
-  // Если такой ID уже есть в retired, можно добавить ещё один ноль, но пока просто используем как есть
-  
-  // Создаём копию прибора с новым ID и статусом retired
   const retiredItem = {
     ...item,
     id: newId,
@@ -287,7 +281,6 @@ async function retireInstrument(item, goList) {
     retired_date: today()
   };
   state.retired.push(retiredItem);
-  // Удаляем из основного списка
   state.instruments = state.instruments.filter((row) => row !== item);
   await saveWorkbook('Прибор списан');
   goList();
@@ -296,23 +289,15 @@ async function retireInstrument(item, goList) {
 // --- ВОССТАНОВИТЬ СПИСАННЫЙ ---
 export async function restoreRetiredItem(item, goList) {
   if (!confirm('Восстановить прибор из списанных?')) return;
-  
-  // Убираем ведущий ноль из ID, если он есть
   let originalId = String(item.id);
   if (originalId.startsWith('0')) {
-    originalId = originalId.slice(1); // убираем первый символ
+    originalId = originalId.slice(1);
   }
-  
-  // Проверяем, занят ли этот ID в основном списке
   let newId = originalId;
   if (state.instruments.some((row) => String(row.id) === newId)) {
-    newId = nextId(); // если занят, берём минимальный свободный
+    newId = nextId();
   }
-  
-  // Удаляем из retired
   state.retired = state.retired.filter((row) => row !== item);
-  
-  // Создаём восстановленный прибор
   const restored = {
     ...item,
     id: newId,
