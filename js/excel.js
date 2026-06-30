@@ -23,9 +23,9 @@ export async function loadWorkbook() {
     throw new Error('API не вернул ссылку на файл');
   }
   
-  // 2. Скачиваем файл через тот же прокси
+  // 2. Скачиваем файл ЧЕРЕЗ ТОТ ЖЕ ПРОКСИ
   const fileRequestUrl = proxyBase + '?url=' + encodeURIComponent(data.href);
-  console.log('[loadWorkbook] URL запроса к файлу:', fileRequestUrl);
+  console.log('[loadWorkbook] URL запроса к файлу (через прокси):', fileRequestUrl);
   
   const fileResponse = await fetch(fileRequestUrl);
   if (!fileResponse.ok) {
