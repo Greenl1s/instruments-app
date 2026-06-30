@@ -3,35 +3,31 @@ import { state } from './state.js';
 import { clean } from './utils.js';
 import { setSync } from './ui.js';
 
-function apiUrl(path) {
-  // Эта функция больше не нужна, но оставим для совместимости
-  return CONFIG.proxyUrl.replace(/\/+$/, '');
-}
-
 export async function loadWorkbook() {
   setSync('Загрузка файла...');
   console.log('[loadWorkbook] Начинаем загрузку');
   
-  // Формируем URL для API Яндекс.Диска
-  const yandexApiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=' + CONFIG.publicKey;
-  
-  // Формируем запрос к прокси
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
-  // ВАЖНО: кодируем ТОЛЬКО один раз, не кодируем уже закодированное
-  const requestUrl = proxyBase + '?url=' + encodeURIComponent(yandexApiUrl);
   
-  console.log('[loadWorkbook] URL запроса:', requestUrl);
+  // 1. Получаем ссылку на скачивание через прокси
+  const yandexApiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=' + CONFIG.publicKey;
+  const apiRequestUrl = proxyBase + '?url=' + encodeURIComponent(yandexApiUrl);
+  console.log('[loadWorkbook] URL запроса к API:', apiRequestUrl);
   
-  const response = await fetch(requestUrl);
-  console.log('[loadWorkbook] Статус ответа:', response.status);
-  
-  if (!response.ok) {
-    throw new Error('Не удалось загрузить Excel-файл. Статус: ' + response.status);
+  const apiResponse = await fetch(apiRequestUrl);
+  if (!apiResponse.ok) {
+    throw new Error('Не удалось получить ссылку на скачивание. Статус: ' + apiResponse.status);
+  }
+  const data = await apiResponse.json();
+  if (!data.href) {
+    throw new Error('API не вернул ссылку на файл');
   }
   
-  const data = await response.json();
-  // Скачиваем файл по полученной ссылке
-  const fileResponse = await fetch(data.href);
+  // 2. Скачиваем файл через тот же прокси
+  const fileRequestUrl = proxyBase + '?url=' + encodeURIComponent(data.href);
+  console.log('[loadWorkbook] URL запроса к файлу:', fileRequestUrl);
+  
+  const fileResponse = await fetch(fileRequestUrl);
   if (!fileResponse.ok) {
     throw new Error('Не удалось скачать файл. Статус: ' + fileResponse.status);
   }
@@ -60,8 +56,9 @@ export async function saveWorkbook(message = 'Сохранено') {
   const wbout = XLSX.write(state.workbook, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
-  // Получаем ссылку для загрузки через прокси
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
+  
+  // Получаем ссылку для загрузки через прокси
   const uploadUrl = 'https://cloud-api.yandex.net/v1/disk/resources/upload?path=' + encodeURIComponent(CONFIG.filePath || '/Учёт.xlsx') + '&overwrite=true';
   const getUploadUrl = proxyBase + '?url=' + encodeURIComponent(uploadUrl);
   
@@ -71,13 +68,13 @@ export async function saveWorkbook(message = 'Сохранено') {
   if (!uploadResponse.ok) {
     throw new Error('Не удалось получить ссылку для загрузки');
   }
-  const data = await uploadResponse.json();
-  if (!data.href) {
+  const uploadData = await uploadResponse.json();
+  if (!uploadData.href) {
     throw new Error('Нет href для загрузки');
   }
 
   // Отправляем файл через прокси
-  const putUrl = proxyBase + '?url=' + encodeURIComponent(data.href);
+  const putUrl = proxyBase + '?url=' + encodeURIComponent(uploadData.href);
   const putResponse = await fetch(putUrl, {
     method: 'PUT',
     headers: {
