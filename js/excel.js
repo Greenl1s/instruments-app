@@ -5,17 +5,22 @@ import { setSync } from './ui.js';
 
 export async function loadWorkbook() {
   setSync('Загрузка файла...');
+  console.log('[loadWorkbook] Начинаем загрузку');
+
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
   const url = proxyBase + '/download?public_key=' + encodeURIComponent(CONFIG.publicKey);
+  console.log('[loadWorkbook] URL запроса:', url);
 
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error('Не удалось скачать файл. Статус: ' + response.status);
+    const text = await response.text();
+    throw new Error('Не удалось скачать файл. Статус: ' + response.status + ' ' + text);
   }
 
   const blob = await response.blob();
-  state.workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+  console.log('[loadWorkbook] Размер файла:', blob.size, 'байт');
 
+  state.workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
   state.instruments = readSheet(SHEETS.instruments, HEADERS.instruments);
   state.history = readSheet(SHEETS.history, HEADERS.history);
   state.users = readSheet(SHEETS.users, HEADERS.users);
@@ -23,8 +28,10 @@ export async function loadWorkbook() {
   normalizeLoadedData();
   setSync('Файл загружен');
 }
+
 export async function saveWorkbook(message = 'Сохранено') {
   setSync('Сохранение...');
+  console.log('saveWorkbook: начинаем сохранение');
 
   writeSheet(SHEETS.instruments, HEADERS.instruments, state.instruments);
   writeSheet(SHEETS.history, HEADERS.history, state.history);
@@ -35,7 +42,10 @@ export async function saveWorkbook(message = 'Сохранено') {
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
-  const response = await fetch(proxyBase + '/upload', {
+  const url = proxyBase + '/upload';
+  console.log('saveWorkbook: отправка на', url);
+
+  const response = await fetch(url, {
     method: 'PUT',
     headers: {
       'X-Write-Secret': CONFIG.writeSecret,
@@ -46,12 +56,15 @@ export async function saveWorkbook(message = 'Сохранено') {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error('Не удалось сохранить файл. Статус: ' + response.status + ' ' + text);
+    throw new Error('Не удалось сохранить Excel-файл. Статус: ' + response.status + ' ' + text);
   }
 
   setSync(message);
+  console.log('saveWorkbook: сохранение успешно завершено');
 }
-// ... остальные функции без изменений (readSheet, writeSheet, normalizeLoadedData, normalizeCondition)
+
+// ==================== Вспомогательные функции (без изменений) ====================
+
 function readSheet(name, headers) {
   const sheet = state.workbook.Sheets[name];
   if (!sheet) return [];
