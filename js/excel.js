@@ -5,36 +5,17 @@ import { setSync } from './ui.js';
 
 export async function loadWorkbook() {
   setSync('Загрузка файла...');
-  console.log('[loadWorkbook] Начинаем загрузку');
-  
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
-  
-  // 1. Получаем ссылку на скачивание через прокси (GET /download?public_key=...)
-  const apiRequestUrl = proxyBase + '/download?public_key=' + encodeURIComponent(CONFIG.publicKey);
-  console.log('[loadWorkbook] URL запроса к API (через прокси):', apiRequestUrl);
-  
-  const apiResponse = await fetch(apiRequestUrl);
-  if (!apiResponse.ok) {
-    throw new Error('Не удалось получить ссылку на скачивание. Статус: ' + apiResponse.status);
+  const url = proxyBase + '/download?public_key=' + encodeURIComponent(CONFIG.publicKey);
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error('Не удалось скачать файл. Статус: ' + response.status);
   }
-  const data = await apiResponse.json();
-  if (!data.href) {
-    throw new Error('API не вернул ссылку на файл');
-  }
-  
-  // 2. Скачиваем файл через тот же прокси (GET /?url=...)
-  const fileRequestUrl = proxyBase + '?url=' + encodeURIComponent(data.href);
-  console.log('[loadWorkbook] URL запроса к файлу:', fileRequestUrl);
-  
-  const fileResponse = await fetch(fileRequestUrl);
-  if (!fileResponse.ok) {
-    throw new Error('Не удалось скачать файл. Статус: ' + fileResponse.status);
-  }
-  
-  const blob = await fileResponse.blob();
-  console.log('[loadWorkbook] Размер файла:', blob.size, 'байт');
-  
+
+  const blob = await response.blob();
   state.workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+
   state.instruments = readSheet(SHEETS.instruments, HEADERS.instruments);
   state.history = readSheet(SHEETS.history, HEADERS.history);
   state.users = readSheet(SHEETS.users, HEADERS.users);
@@ -42,7 +23,6 @@ export async function loadWorkbook() {
   normalizeLoadedData();
   setSync('Файл загружен');
 }
-
 export async function saveWorkbook(message = 'Сохранено') {
   setSync('Сохранение...');
   console.log('saveWorkbook: начинаем сохранение');
