@@ -2,7 +2,6 @@ export const CONFIG = {
   proxyUrl: 'https://prox-cstroy.vercel.app',
   publicKey: 'https://disk.yandex.ru/i/jU1KxLsivSfagA',
   writeSecret: 'mySecretKey123',
-  filePath: '/Учёт.xlsx'
 };
 
 export const SHEETS = {
