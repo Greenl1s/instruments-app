@@ -9,16 +9,29 @@ export async function loadWorkbook() {
   
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
   
-  // Загружаем файл через Worker одним запросом
-  const downloadUrl = proxyBase + '/download?public_key=' + encodeURIComponent(CONFIG.publicKey);
-  console.log('[loadWorkbook] URL скачивания:', downloadUrl);
+  // 1. Получаем ссылку на скачивание через прокси (GET /download?public_key=...)
+  const apiRequestUrl = proxyBase + '/download?public_key=' + encodeURIComponent(CONFIG.publicKey);
+  console.log('[loadWorkbook] URL запроса к API (через прокси):', apiRequestUrl);
   
-  const response = await fetch(downloadUrl);
-  if (!response.ok) {
-    throw new Error('Не удалось загрузить файл. Статус: ' + response.status);
+  const apiResponse = await fetch(apiRequestUrl);
+  if (!apiResponse.ok) {
+    throw new Error('Не удалось получить ссылку на скачивание. Статус: ' + apiResponse.status);
+  }
+  const data = await apiResponse.json();
+  if (!data.href) {
+    throw new Error('API не вернул ссылку на файл');
   }
   
-  const blob = await response.blob();
+  // 2. Скачиваем файл через тот же прокси (GET /?url=...)
+  const fileRequestUrl = proxyBase + '?url=' + encodeURIComponent(data.href);
+  console.log('[loadWorkbook] URL запроса к файлу:', fileRequestUrl);
+  
+  const fileResponse = await fetch(fileRequestUrl);
+  if (!fileResponse.ok) {
+    throw new Error('Не удалось скачать файл. Статус: ' + fileResponse.status);
+  }
+  
+  const blob = await fileResponse.blob();
   console.log('[loadWorkbook] Размер файла:', blob.size, 'байт');
   
   state.workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
@@ -44,22 +57,29 @@ export async function saveWorkbook(message = 'Сохранено') {
 
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
   
-  // Получаем ссылку для загрузки через Worker (используем /upload)
-  const uploadUrl = proxyBase + '/upload?path=' + encodeURIComponent(CONFIG.filePath || '/Учёт.xlsx') + '&overwrite=true';
-  const uploadResponse = await fetch(uploadUrl, {
-    method: 'GET',
+  // 1. Получаем ссылку для загрузки через прокси (GET /upload?path=...)
+  const uploadPath = CONFIG.filePath || '/Учёт.xlsx';
+  const uploadUrl = 'https://cloud-api.yandex.net/v1/disk/resources/upload?path=' + encodeURIComponent(uploadPath) + '&overwrite=true';
+  const getUploadUrl = proxyBase + '/upload?path=' + encodeURIComponent(uploadPath);
+  console.log('saveWorkbook: запрос на получение ссылки для загрузки:', getUploadUrl);
+  
+  const uploadResponse = await fetch(getUploadUrl, {
     headers: { 'X-Write-Secret': CONFIG.writeSecret }
   });
   if (!uploadResponse.ok) {
-    throw new Error('Не удалось получить ссылку для загрузки');
+    const text = await uploadResponse.text();
+    throw new Error('Не удалось получить ссылку для загрузки. Статус: ' + uploadResponse.status + ' ' + text);
   }
   const uploadData = await uploadResponse.json();
   if (!uploadData.href) {
     throw new Error('Нет href для загрузки');
   }
+  console.log('saveWorkbook: получен href для загрузки:', uploadData.href);
 
-  // Загружаем файл через Worker (PUT)
-  const putUrl = proxyBase + '/upload?path=' + encodeURIComponent(CONFIG.filePath || '/Учёт.xlsx') + '&overwrite=true';
+  // 2. Отправляем файл через прокси (PUT /?url=...)
+  const putUrl = proxyBase + '?url=' + encodeURIComponent(uploadData.href);
+  console.log('saveWorkbook: отправка файла через прокси:', putUrl);
+  
   const putResponse = await fetch(putUrl, {
     method: 'PUT',
     headers: {
@@ -69,13 +89,15 @@ export async function saveWorkbook(message = 'Сохранено') {
     body: blob
   });
   if (!putResponse.ok) {
-    throw new Error('Не удалось сохранить Excel-файл');
+    const text = await putResponse.text();
+    throw new Error('Не удалось сохранить Excel-файл. Статус: ' + putResponse.status + ' ' + text);
   }
 
   setSync(message);
+  console.log('saveWorkbook: сохранение успешно завершено');
 }
 
-// ... остальные функции (readSheet, writeSheet, normalizeLoadedData, normalizeCondition) остаются без изменений
+// ... остальные функции без изменений (readSheet, writeSheet, normalizeLoadedData, normalizeCondition)
 function readSheet(name, headers) {
   const sheet = state.workbook.Sheets[name];
   if (!sheet) return [];
