@@ -25,7 +25,6 @@ export async function loadWorkbook() {
 }
 export async function saveWorkbook(message = 'Сохранено') {
   setSync('Сохранение...');
-  console.log('saveWorkbook: начинаем сохранение');
 
   writeSheet(SHEETS.instruments, HEADERS.instruments, state.instruments);
   writeSheet(SHEETS.history, HEADERS.history, state.history);
@@ -36,31 +35,7 @@ export async function saveWorkbook(message = 'Сохранено') {
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
   const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
-  
-  // 1. Получаем ссылку для загрузки через прокси (GET /upload?path=...)
-  const uploadPath = CONFIG.filePath || '/Учёт.xlsx';
-  const uploadUrl = 'https://cloud-api.yandex.net/v1/disk/resources/upload?path=' + encodeURIComponent(uploadPath) + '&overwrite=true';
-  const getUploadUrl = proxyBase + '/upload?path=' + encodeURIComponent(uploadPath);
-  console.log('saveWorkbook: запрос на получение ссылки для загрузки:', getUploadUrl);
-  
-  const uploadResponse = await fetch(getUploadUrl, {
-    headers: { 'X-Write-Secret': CONFIG.writeSecret }
-  });
-  if (!uploadResponse.ok) {
-    const text = await uploadResponse.text();
-    throw new Error('Не удалось получить ссылку для загрузки. Статус: ' + uploadResponse.status + ' ' + text);
-  }
-  const uploadData = await uploadResponse.json();
-  if (!uploadData.href) {
-    throw new Error('Нет href для загрузки');
-  }
-  console.log('saveWorkbook: получен href для загрузки:', uploadData.href);
-
-  // 2. Отправляем файл через прокси (PUT /?url=...)
-  const putUrl = proxyBase + '?url=' + encodeURIComponent(uploadData.href);
-  console.log('saveWorkbook: отправка файла через прокси:', putUrl);
-  
-  const putResponse = await fetch(putUrl, {
+  const response = await fetch(proxyBase + '/upload', {
     method: 'PUT',
     headers: {
       'X-Write-Secret': CONFIG.writeSecret,
@@ -68,15 +43,14 @@ export async function saveWorkbook(message = 'Сохранено') {
     },
     body: blob
   });
-  if (!putResponse.ok) {
-    const text = await putResponse.text();
-    throw new Error('Не удалось сохранить Excel-файл. Статус: ' + putResponse.status + ' ' + text);
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error('Не удалось сохранить файл. Статус: ' + response.status + ' ' + text);
   }
 
   setSync(message);
-  console.log('saveWorkbook: сохранение успешно завершено');
 }
-
 // ... остальные функции без изменений (readSheet, writeSheet, normalizeLoadedData, normalizeCondition)
 function readSheet(name, headers) {
   const sheet = state.workbook.Sheets[name];
