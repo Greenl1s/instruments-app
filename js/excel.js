@@ -63,8 +63,6 @@ export async function saveWorkbook(message = 'Сохранено') {
   console.log('saveWorkbook: сохранение успешно завершено');
 }
 
-// ==================== Вспомогательные функции (без изменений) ====================
-
 function readSheet(name, headers) {
   const sheet = state.workbook.Sheets[name];
   if (!sheet) return [];
