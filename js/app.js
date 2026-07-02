@@ -6,6 +6,9 @@ import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRe
 import { showCalendar } from './calendar.js';
 import { openModal, toast, closeModal } from './ui.js';
 
+// Для отладки – сделаем closeModal глобальной
+window.closeModal = closeModal;
+
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -17,31 +20,31 @@ async function init() {
     state.currentUser ? showApp() : showAuth();
   } catch (error) {
     toast(error.message, true);
-    document.getElementById('authView').innerHTML = '<div class="panel card">Ошибка загрузки: ' + error.message + '</div>';
+    $('authView').innerHTML = '<div class="panel card">Ошибка загрузки: ' + error.message + '</div>';
   }
 }
 
 function bindEvents() {
-  document.getElementById('loginForm').addEventListener('submit', onLogin);
-  document.getElementById('logoutButton').onclick = () => {
+  $('loginForm').addEventListener('submit', onLogin);
+  $('logoutButton').onclick = () => {
     logout();
     history.pushState(null, '', location.pathname);
     showAuth();
   };
-  document.getElementById('usersButton').onclick = showUsersManager;
-  document.getElementById('profileButton').onclick = () => showUserForm(state.users.find((u) => u.username === state.currentUser.username), showApp);
-  document.getElementById('addInstrumentButton').onclick = () => showInstrumentForm();
-  document.getElementById('calendarButton').onclick = showCalendar;
-  document.getElementById('retiredButton').onclick = showRetired;
-  document.getElementById('searchInput').oninput = (e) => {
+  $('usersButton').onclick = showUsersManager;
+  $('profileButton').onclick = () => showUserForm(state.users.find((u) => u.username === state.currentUser.username), showApp);
+  $('addInstrumentButton').onclick = () => showInstrumentForm();
+  $('calendarButton').onclick = showCalendar;
+  $('retiredButton').onclick = showRetired;
+  $('searchInput').oninput = (e) => {
     state.search = e.target.value;
     renderList(openCard);
   };
-  document.getElementById('verificationFilter').onchange = (e) => {
+  $('verificationFilter').onchange = (e) => {
     state.verification = e.target.value;
     renderList(openCard);
   };
-  document.getElementById('conditionFilter').onchange = (e) => {
+  $('conditionFilter').onchange = (e) => {
     state.condition = e.target.value;
     renderList(openCard);
   };
@@ -51,19 +54,19 @@ function bindEvents() {
 
 function onLogin(event) {
   event.preventDefault();
-  if (!login(document.getElementById('loginUsername').value.trim(), document.getElementById('loginPassword').value)) return toast('Неверный логин или пароль', true);
+  if (!login($('loginUsername').value.trim(), $('loginPassword').value)) return toast('Неверный логин или пароль', true);
   showApp();
 }
 
 function showAuth() {
-  document.getElementById('authView').classList.remove('hidden');
-  document.getElementById('appView').classList.add('hidden');
+  $('authView').classList.remove('hidden');
+  $('appView').classList.add('hidden');
 }
 
 function showApp() {
-  document.getElementById('authView').classList.add('hidden');
-  document.getElementById('appView').classList.remove('hidden');
-  document.getElementById('currentUserBadge').textContent = state.currentUser.role === 'admin' ? 'Администратор' : state.currentUser.username;
+  $('authView').classList.add('hidden');
+  $('appView').classList.remove('hidden');
+  $('currentUserBadge').textContent = state.currentUser.role === 'admin' ? 'Администратор' : state.currentUser.username;
   document.querySelectorAll('.admin-only').forEach((node) => node.classList.toggle('hidden', state.currentUser.role !== 'admin'));
   renderRoute();
 }
@@ -72,8 +75,8 @@ function renderRoute() {
   const id = new URLSearchParams(location.search).get('id');
   if (id) renderCard(id, goList);
   else {
-    document.getElementById('cardScreen').classList.add('hidden');
-    document.getElementById('listScreen').classList.remove('hidden');
+    $('cardScreen').classList.add('hidden');
+    $('listScreen').classList.remove('hidden');
     renderList(openCard);
   }
 }
@@ -110,7 +113,11 @@ function showRetired() {
     document.querySelectorAll('[data-open-retired-id]').forEach((btn) => {
       btn.onclick = (e) => {
         const id = btn.dataset.openRetiredId;
-        closeModal();
+        // Закрываем модалку напрямую через DOM
+        const modal = document.getElementById('modal');
+        if (modal) modal.close();
+        // Также вызываем closeModal на случай, если она определена
+        if (typeof closeModal === 'function') closeModal();
         openCard(id);
       };
     });
