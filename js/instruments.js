@@ -117,10 +117,12 @@ export function renderCard(id, goList) {
   let adminButtons = '';
 
   if (isRetiredFlag) {
-    mainButtons += '<button class="secondary" data-qr>QR</button>';
+    // Для списанных приборов - только восстановить, копировать, редактировать
     mainButtons += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
       mainButtons += '<button class="primary" data-restore>Восстановить</button>';
+      mainButtons += '<button class="secondary" data-edit>Редактировать</button>';
+      adminButtons += '<button class="danger" data-delete>Удалить</button>';
     }
   } else {
     if (!isTaken) {
@@ -229,7 +231,7 @@ export function showInstrumentForm(item = null) {
 // ========== ВЗЯТЬ ПРИБОР (с подстановкой extra из профиля) ==========
 
 function showTakeForm(item) {
-  const userExtra = state.currentUser?.extra || ''; // берём из профиля
+  const userExtra = state.currentUser?.extra || '';
 
   openModal('Взять прибор',
     `<form id="takeForm" class="form-grid">
@@ -238,8 +240,7 @@ function showTakeForm(item) {
         <div class="field-value">${escapeHtml(state.currentUser.username)}</div>
       </div>
       ${input('taken_where', 'Место использования', item.taken_where)}
-      ${input('taken_extra', 'Доп. данные (из профиля)', userExtra, 'text')} 
-      <!-- поле редактируемо, изменения не влияют на профиль -->
+      ${input('taken_extra', 'Доп. данные (из профиля)', userExtra, 'text')}
       ${input('taken_date', 'Дата', today(), 'date')}
       <div class="modal-actions"><button class="primary" type="submit">Взять</button></div>
     </form>`);
@@ -265,7 +266,7 @@ async function returnInstrument(item) {
   closeHistoryEntry(item, state.currentUser.username);
   item.taken_by = '';
   item.taken_where = '';
-  item.taken_extra = '';   // очищаем
+  item.taken_extra = '';
   item.taken_date = '';
   await saveWorkbook('Прибор возвращен');
   window.dispatchEvent(new Event('app:refresh-route'));
