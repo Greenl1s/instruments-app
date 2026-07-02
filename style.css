@@ -1,42 +1,8 @@
 /* Календарь - цвета для разных событий */
-.day.booked {
-  background: #fee2e2;
-  color: #b42318;
-  border: 1px solid #fda29b;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.day.taken {
-  background: #dbeafe;
-  color: #1e40af;
-  border: 1px solid #93c5fd;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.day.mixed {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.day.all {
-  background: #e9d5ff;
-  color: #6b21a8;
-  border: 1px solid #c084fc;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-/* Стили для событий в модалке */
-.day-events h3 {
-  margin: 12px 0 8px 0;
-  font-size: 16px;
-  color: var(--muted);
-}
-.day-events .row {
-  margin-bottom: 6px;
-}
+/* Цвета для календаря */
+.day.red { background: #fee2e2; color: #b42318; border: 1px solid #fca5a5; cursor: pointer; }
+.day.green { background: #dcfae6; color: #067647; border: 1px solid #6ee7b7; cursor: pointer; }
+.day.blue { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; cursor: pointer; }
+.day.orange { background: #ffedd5; color: #b45309; border: 1px solid #fdba74; cursor: pointer; }
+.day.purple { background: #ede9fe; color: #6b21a8; border: 1px solid #c4b5fd; cursor: pointer; }
+.day.today { background: #e2e8f0; border: 2px solid #94a3b8; }
