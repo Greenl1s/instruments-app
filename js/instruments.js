@@ -308,6 +308,7 @@ async function returnInstrument(item) {
   item.taken_date = '';
   item.booked_by = '';
   item.booked_date = '';
+  item.booked_extra = '';
   await saveWorkbook('Прибор возвращен');
   window.dispatchEvent(new Event('app:refresh-route'));
 }
@@ -371,25 +372,25 @@ async function cancelBooking(item) {
   if (!confirm('Отменить бронирование?')) return;
   item.booked_by = '';
   item.booked_date = '';
+  item.booked_extra = '';
   item.condition = 'free';
   await saveWorkbook('Бронирование отменено');
   window.dispatchEvent(new Event('app:refresh-route'));
 }
-
 // ========== ПОДТВЕРЖДЕНИЕ БРОНИРОВАНИЯ (перевод в "взят") ==========
 
 async function confirmBooking(item) {
   if (!confirm('Подтвердить бронирование и выдать прибор?')) return;
-  // Переводим в статус "взят"
   const now = today();
   item.taken_by = item.booked_by;
   item.taken_date = now;
   item.taken_where = ''; // можно запросить место, но для простоты оставим пустым
-  item.taken_extra = '';
+  item.taken_extra = item.booked_extra || ''; // переносим доп. информацию
   item.condition = 'busy';
   // Очищаем поля бронирования
   item.booked_by = '';
   item.booked_date = '';
+  item.booked_extra = '';
   addHistoryEntry(item);
   await saveWorkbook('Бронирование подтверждено, прибор выдан');
   window.dispatchEvent(new Event('app:refresh-route'));
@@ -410,7 +411,8 @@ async function retireInstrument(item, goList) {
     condition: 'retired',
     retired_date: today(),
     booked_by: '',
-    booked_date: ''
+    booked_date: '',
+    booked_extra: ''
   };
   state.retired.push(retiredItem);
   state.instruments = state.instruments.filter((row) => row !== item);
@@ -440,7 +442,8 @@ export async function restoreRetiredItem(item, goList) {
     taken_extra: '',
     taken_date: '',
     booked_by: '',
-    booked_date: ''
+    booked_date: '',
+    booked_extra: ''
   };
   delete restored.retired_date;
   state.instruments.push(restored);
@@ -448,7 +451,6 @@ export async function restoreRetiredItem(item, goList) {
   if (goList) goList();
   else window.dispatchEvent(new Event('app:refresh-route'));
 }
-
 // ========== УДАЛИТЬ ==========
 
 async function deleteInstrument(item, goList) {
