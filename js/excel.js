@@ -101,5 +101,6 @@ export function normalizeCondition(value) {
   const v = String(value || '').toLowerCase();
   if (['busy','занят'].includes(v)) return 'busy';
   if (['retired','broken','списан'].includes(v)) return 'retired';
+  if (['booked','забронирован'].includes(v)) return 'booked';
   return 'free';
 }
