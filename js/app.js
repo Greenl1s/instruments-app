@@ -4,7 +4,7 @@ import { loadWorkbook } from './excel.js';
 import { ensureDefaultAdmin, login, logout, readSession, showUserForm, showUsersManager } from './auth.js';
 import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRetiredItem } from './instruments.js';
 import { showCalendar } from './calendar.js';
-import { openModal, toast } from './ui.js';
+import { openModal, toast, closeModal } from './ui.js'; // ← добавлен closeModal
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -110,8 +110,8 @@ function showRetired() {
     document.querySelectorAll('[data-open-retired-id]').forEach((btn) => {
       btn.onclick = (e) => {
         const id = btn.dataset.openRetiredId;
-        closeModal(); // закрываем модалку
-        openCard(id); // открываем карточку
+        closeModal(); // теперь функция доступна
+        openCard(id);
       };
     });
   }
