@@ -337,6 +337,8 @@ function showTransferForm(item) {
 // ========== БРОНИРОВАНИЕ ==========
 
 function showBookForm(item) {
+  const userExtra = state.currentUser?.extra || '';
+
   openModal('Забронировать прибор',
     `<form id="bookForm" class="form-grid">
       <div class="field">
@@ -344,6 +346,7 @@ function showBookForm(item) {
         <div class="field-value">${escapeHtml(state.currentUser.username)}</div>
       </div>
       ${input('booked_date', 'Дата бронирования', today(), 'date', true)}
+      ${input('booked_extra', 'Доп. информация (из профиля)', userExtra, 'text')}
       <div class="modal-actions"><button class="primary" type="submit">Забронировать</button></div>
     </form>`);
 
@@ -351,9 +354,9 @@ function showBookForm(item) {
     event.preventDefault();
     const data = formData(event.target);
     if (!data.booked_date) return toast('Выберите дату', true);
-    // Проверяем, не забронирован ли уже на эту дату (можно опционально)
     item.booked_by = state.currentUser.username;
     item.booked_date = data.booked_date;
+    item.booked_extra = data.booked_extra || '';
     item.condition = 'booked';
     closeModal();
     await saveWorkbook('Прибор забронирован');
