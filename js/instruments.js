@@ -348,23 +348,39 @@ export async function restoreRetiredItem(item, goList) {
 // ========== УДАЛИТЬ (активный или списанный) ==========
 
 async function deleteInstrument(item, goList) {
-  // Проверяем, есть ли прибор в списанных
-  const isRetired = state.retired.some((i) => i === item);
+  console.log('=== deleteInstrument вызвана ===');
+  console.log('item:', item);
+  console.log('state.retired:', state.retired);
+  
+  // Проверяем, есть ли прибор в списанных (по ссылке)
+  const isRetiredByRef = state.retired.some((i) => i === item);
+  // Также проверим по ID и condition
+  const isRetiredById = state.retired.some((i) => String(i.id) === String(item.id));
+  const isRetiredByCondition = item.condition === 'retired';
+  
+  console.log('isRetiredByRef:', isRetiredByRef);
+  console.log('isRetiredById:', isRetiredById);
+  console.log('isRetiredByCondition:', isRetiredByCondition);
+  
+  const isRetired = isRetiredByRef || isRetiredById || isRetiredByCondition;
   
   if (!confirm('Удалить прибор без возможности восстановления?')) return;
   
   if (isRetired) {
-    // Удаляем из списанных
-    state.retired = state.retired.filter((i) => i !== item);
-    // Закрываем модалку, если она открыта (например, если удаляем из карточки, открытой из модалки)
+    console.log('Удаляем из списанных');
+    state.retired = state.retired.filter((i) => String(i.id) !== String(item.id));
+    console.log('После удаления state.retired:', state.retired);
+    
+    // Закрываем модалку, если она открыта
     const modal = document.getElementById('modal');
     if (modal && modal.open) modal.close();
+    
     await saveWorkbook('Прибор удалён из списанных');
-    // Переходим к списку активных приборов
+    console.log('Сохранено, переходим к списку');
     goList();
   } else {
-    // Удаляем из активных
-    state.instruments = state.instruments.filter((i) => i !== item);
+    console.log('Удаляем из активных');
+    state.instruments = state.instruments.filter((i) => String(i.id) !== String(item.id));
     await saveWorkbook('Прибор удалён');
     goList();
   }
