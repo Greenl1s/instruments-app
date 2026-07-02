@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { pad } from './utils.js';
-import { openModal, closeModal } from './ui.js';
+import { openModal } from './ui.js';
 
 export function showCalendar() {
   let currentYear = new Date().getFullYear();
@@ -12,7 +12,7 @@ export function showCalendar() {
     state.instruments.forEach((item) => {
       if (!item.valid_until) return;
       if (!verificationMap.has(item.valid_until)) verificationMap.set(item.valid_until, []);
-      verificationMap.get(item.valid_until).push(item);
+      verificationMap.get(item.valid_until).push({ ...item, type: 'verification' });
     });
 
     // Карта для бронирований
@@ -20,7 +20,15 @@ export function showCalendar() {
     state.instruments.forEach((item) => {
       if (!item.booked_by || !item.booked_date) return;
       if (!bookedMap.has(item.booked_date)) bookedMap.set(item.booked_date, []);
-      bookedMap.get(item.booked_date).push(item);
+      bookedMap.get(item.booked_date).push({ ...item, type: 'booked' });
+    });
+
+    // Карта для взятых приборов (по дате выдачи)
+    const takenMap = new Map();
+    state.instruments.forEach((item) => {
+      if (!item.taken_by || !item.taken_date) return;
+      if (!takenMap.has(item.taken_date)) takenMap.set(item.taken_date, []);
+      takenMap.get(item.taken_date).push({ ...item, type: 'taken' });
     });
 
     const first = new Date(y, m, 1);
@@ -37,31 +45,67 @@ export function showCalendar() {
       const key = y + '-' + pad(m + 1) + '-' + pad(d);
       const verificationEvents = verificationMap.get(key) || [];
       const bookedEvents = bookedMap.get(key) || [];
+      const takenEvents = takenMap.get(key) || [];
       const isToday = (y === today.getFullYear() && m === today.getMonth() && d === today.getDate());
       
       let classes = 'day';
       if (isToday) classes += ' today';
-      if (verificationEvents.length) classes += ' event';
-      if (bookedEvents.length) classes += ' booked';
+      
+      let hasVerification = verificationEvents.length > 0;
+      let hasBooked = bookedEvents.length > 0;
+      let hasTaken = takenEvents.length > 0;
+      
+      if (hasVerification) classes += ' event';
+      if (hasBooked) classes += ' booked';
+      if (hasTaken) classes += ' taken';
+      // Если есть и бронь и поверка – добавляем класс both
+      if (hasBooked && hasVerification) classes += ' both';
       
       let click = '';
-      const titles = [];
-      if (verificationEvents.length) titles.push('Поверка: ' + verificationEvents.map(i => i.name).join(', '));
-      if (bookedEvents.length) titles.push('Бронь: ' + bookedEvents.map(i => i.name + ' (' + i.booked_by + ')').join(', '));
-      
-      if (verificationEvents.length || bookedEvents.length) {
+      const allEvents = [...verificationEvents, ...bookedEvents, ...takenEvents];
+      if (allEvents.length) {
         const dateStr = key;
         click = `onclick="window._showDayEvents('${dateStr}')"`;
       }
       
-      grid += `<div class="${classes}" ${click} title="${titles.join('; ')}">${d}</div>`;
+      // Формируем подсказку
+      let titleParts = [];
+      if (hasVerification) titleParts.push('Поверка: ' + verificationEvents.map(i => i.name).join(', '));
+      if (hasBooked) titleParts.push('Бронь: ' + bookedEvents.map(i => i.name + ' (' + i.booked_by + ')').join(', '));
+      if (hasTaken) titleParts.push('Взято: ' + takenEvents.map(i => i.name + ' (' + i.taken_by + ')').join(', '));
+      
+      grid += `<div class="${classes}" ${click} title="${titleParts.join('; ')}">${d}</div>`;
     }
     return grid;
+  }
+
+  function renderLegend() {
+    return `
+      <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; padding:12px; background:#f8fafc; border-radius:8px; border:1px solid #d9e0ea; justify-content:center;">
+        <span style="display:flex; align-items:center; gap:6px;">
+          <span style="display:inline-block; width:20px; height:20px; border-radius:4px; background:#dcfae6; border:1px solid #75e0a7;"></span>
+          <span>Истекает срок поверки</span>
+        </span>
+        <span style="display:flex; align-items:center; gap:6px;">
+          <span style="display:inline-block; width:20px; height:20px; border-radius:4px; background:#fee2e2; border:1px solid #fda29b;"></span>
+          <span>Забронирован</span>
+        </span>
+        <span style="display:flex; align-items:center; gap:6px;">
+          <span style="display:inline-block; width:20px; height:20px; border-radius:4px; background:#dbeafe; border:1px solid #93c5fd;"></span>
+          <span>Взят (выдан)</span>
+        </span>
+        <span style="display:flex; align-items:center; gap:6px;">
+          <span style="display:inline-block; width:20px; height:20px; border-radius:4px; background:#fed7aa; border:1px solid #fb923c;"></span>
+          <span>Бронь + истекает срок</span>
+        </span>
+      </div>
+    `;
   }
 
   function renderMonth(y, m) {
     const monthName = new Date(y, m).toLocaleString('ru', { month: 'long', year: 'numeric' });
     const grid = renderCalendar(y, m);
+    const legend = renderLegend();
     return `
       <div class="calendar-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <button class="secondary" data-cal-prev>◀</button>
@@ -69,23 +113,33 @@ export function showCalendar() {
         <button class="secondary" data-cal-next>▶</button>
       </div>
       <div class="calendar-grid">${grid}</div>
+      ${legend}
     `;
   }
 
   window._showDayEvents = (dateStr) => {
-    // Получаем приборы с поверкой и бронированием на эту дату
-    const instruments = state.instruments.filter((inst) => {
-      return inst.valid_until === dateStr || (inst.booked_date === dateStr && inst.booked_by);
+    // Собираем все события на дату с указанием типа
+    const events = [];
+    state.instruments.forEach((inst) => {
+      if (inst.valid_until === dateStr) {
+        events.push({ ...inst, eventType: 'Поверка' });
+      }
+      if (inst.booked_date === dateStr && inst.booked_by) {
+        events.push({ ...inst, eventType: 'Бронирование', user: inst.booked_by });
+      }
+      if (inst.taken_date === dateStr && inst.taken_by) {
+        events.push({ ...inst, eventType: 'Выдача', user: inst.taken_by });
+      }
     });
-    if (!instruments.length) return;
+    if (!events.length) return;
     
     let listHtml = '';
-    instruments.forEach((inst) => {
+    events.forEach((inst) => {
       let info = `#${inst.id} ${inst.name}`;
-      if (inst.booked_date === dateStr && inst.booked_by) {
-        info += ` (забронирован: ${inst.booked_by})`;
-      } else if (inst.valid_until === dateStr) {
-        info += ` (срок поверки)`;
+      if (inst.eventType === 'Бронирование' || inst.eventType === 'Выдача') {
+        info += ` (${inst.eventType}: ${inst.user})`;
+      } else {
+        info += ` (${inst.eventType})`;
       }
       listHtml += `<div class="row"><span>${info}</span></div>`;
     });
@@ -101,6 +155,7 @@ export function showCalendar() {
 
   function updateCalendar() {
     const body = modal.querySelector('.modal-body');
+    // Удаляем всё кроме заголовка
     const children = body.children;
     for (let i = children.length - 1; i >= 0; i--) {
       if (children[i] !== head) children[i].remove();
