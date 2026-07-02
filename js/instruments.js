@@ -178,10 +178,19 @@ export function renderCard(id, goList) {
 }
 
 function bindCardActions(item, goList, isRetired) {
+  console.log('=== bindCardActions ===');
+  console.log('item:', item);
+  console.log('isRetired:', isRetired);
+  
   const root = document.getElementById('cardScreen');
   const b = (s, fn) => {
     const n = root.querySelector(s);
-    if (n) n.onclick = fn;
+    if (n) {
+      console.log(`Найден элемент с селектором "${s}"`);
+      n.onclick = fn;
+    } else {
+      console.warn(`Элемент с селектором "${s}" не найден`);
+    }
   };
   b('[data-back]', goList);
   b('[data-issue]', () => showTakeForm(item));
