@@ -59,9 +59,6 @@ export async function saveWorkbook(message = 'Сохранено') {
 
   setSync(message);
   console.log('saveWorkbook: сохранение успешно завершено');
-
-  setSync(message);
-  console.log('saveWorkbook: сохранение успешно завершено');
 }
 
 function readSheet(name, headers) {
