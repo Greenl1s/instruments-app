@@ -1,5 +1,5 @@
 export const CONFIG = {
-  proxyUrl: 'https://prox-cstroy-530uik1rl-greenl1s-projects.vercel.app',
+  proxyUrl: 'https://prox-cstroy.vercel.app',
   publicKey: 'https://disk.yandex.ru/i/jU1KxLsivSfagA',
   writeSecret: 'mySecretKey123',
 };
