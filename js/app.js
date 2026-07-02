@@ -35,7 +35,7 @@ function bindEvents() {
   $('profileButton').onclick = () => showUserForm(state.users.find((u) => u.username === state.currentUser.username), showApp);
   $('addInstrumentButton').onclick = () => showInstrumentForm();
   $('calendarButton').onclick = () => {
-  if (state.currentUser.role !== 'admin') {
+  if (state.currentUser && state.currentUser.role !== 'admin') {
     toast('Доступ запрещён', true);
     return;
   }
