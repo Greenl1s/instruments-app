@@ -1,11 +1,11 @@
 import { $, escapeAttr, escapeHtml } from './utils.js';
 
 export function setSync(text) {
-  $('syncStatus').textContent = text;
+  document.getElementById('syncStatus').textContent = text;
 }
 
 export function toast(text, isError = false) {
-  const node = $('toast');
+  const node = document.getElementById('toast');
   node.textContent = text;
   node.style.background = isError ? '#b42318' : '#101828';
   node.classList.remove('hidden');
@@ -13,7 +13,7 @@ export function toast(text, isError = false) {
 }
 
 export function openModal(title, html) {
-  const modal = $('modal');
+  const modal = document.getElementById('modal');
   modal.innerHTML = `
     <div class="modal-body">
       <div class="modal-head">
@@ -28,7 +28,7 @@ export function openModal(title, html) {
 }
 
 export function closeModal() {
-  $('modal').close();
+  document.getElementById('modal').close();
 }
 
 export function field(label, value, raw = false) {
