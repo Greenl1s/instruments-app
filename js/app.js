@@ -34,7 +34,13 @@ function bindEvents() {
   $('usersButton').onclick = showUsersManager;
   $('profileButton').onclick = () => showUserForm(state.users.find((u) => u.username === state.currentUser.username), showApp);
   $('addInstrumentButton').onclick = () => showInstrumentForm();
-  $('calendarButton').onclick = showCalendar;
+  $('calendarButton').onclick = () => {
+  if (state.currentUser.role !== 'admin') {
+    toast('Доступ запрещён', true);
+    return;
+  }
+  showCalendar();
+};
   $('retiredButton').onclick = showRetired;
   $('searchInput').oninput = (e) => {
     state.search = e.target.value;
