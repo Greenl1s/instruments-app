@@ -345,13 +345,29 @@ export async function restoreRetiredItem(item, goList) {
   else window.dispatchEvent(new Event('app:refresh-route'));
 }
 
-// ========== УДАЛИТЬ ==========
+// ========== УДАЛИТЬ (активный или списанный) ==========
 
 async function deleteInstrument(item, goList) {
-  if (!confirm('Удалить прибор без переноса в списанные?')) return;
-  state.instruments = state.instruments.filter((row) => row !== item);
-  await saveWorkbook('Прибор удален');
-  goList();
+  // Проверяем, есть ли прибор в списанных
+  const isRetired = state.retired.some((i) => i === item);
+  
+  if (!confirm('Удалить прибор без возможности восстановления?')) return;
+  
+  if (isRetired) {
+    // Удаляем из списанных
+    state.retired = state.retired.filter((i) => i !== item);
+    // Закрываем модалку, если она открыта (например, если удаляем из карточки, открытой из модалки)
+    const modal = document.getElementById('modal');
+    if (modal && modal.open) modal.close();
+    await saveWorkbook('Прибор удалён из списанных');
+    // Переходим к списку активных приборов
+    goList();
+  } else {
+    // Удаляем из активных
+    state.instruments = state.instruments.filter((i) => i !== item);
+    await saveWorkbook('Прибор удалён');
+    goList();
+  }
 }
 
 // ========== QR и КОПИРОВАНИЕ ==========
