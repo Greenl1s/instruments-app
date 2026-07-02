@@ -7,7 +7,7 @@ export async function loadWorkbook() {
   setSync('Загрузка файла...');
   console.log('[loadWorkbook] Начинаем загрузку');
 
-  const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
+  const proxyBase = await getAvailableProxyUrl(); // получаем доступный домен
   const url = proxyBase + '/download?public_key=' + encodeURIComponent(CONFIG.publicKey);
   console.log('[loadWorkbook] URL запроса:', url);
 
@@ -18,8 +18,6 @@ export async function loadWorkbook() {
   }
 
   const blob = await response.blob();
-  console.log('[loadWorkbook] Размер файла:', blob.size, 'байт');
-
   state.workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
   state.instruments = readSheet(SHEETS.instruments, HEADERS.instruments);
   state.history = readSheet(SHEETS.history, HEADERS.history);
@@ -41,7 +39,7 @@ export async function saveWorkbook(message = 'Сохранено') {
   const wbout = XLSX.write(state.workbook, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
-  const proxyBase = CONFIG.proxyUrl.replace(/\/+$/, '');
+  const proxyBase = await getAvailableProxyUrl(); // получаем доступный домен
   const url = proxyBase + '/upload';
   console.log('saveWorkbook: отправка на', url);
 
@@ -58,6 +56,10 @@ export async function saveWorkbook(message = 'Сохранено') {
     const text = await response.text();
     throw new Error('Не удалось сохранить Excel-файл. Статус: ' + response.status + ' ' + text);
   }
+
+  setSync(message);
+  console.log('saveWorkbook: сохранение успешно завершено');
+}
 
   setSync(message);
   console.log('saveWorkbook: сохранение успешно завершено');
