@@ -1,17 +1,26 @@
 import { state } from './state.js';
 import { pad } from './utils.js';
-import { openModal } from './ui.js';
+import { openModal, closeModal } from './ui.js';
 
 export function showCalendar() {
   let currentYear = new Date().getFullYear();
   let currentMonth = new Date().getMonth();
 
   function renderCalendar(y, m) {
-    const map = new Map();
+    // Карта для сроков поверки
+    const verificationMap = new Map();
     state.instruments.forEach((item) => {
       if (!item.valid_until) return;
-      if (!map.has(item.valid_until)) map.set(item.valid_until, []);
-      map.get(item.valid_until).push(item);
+      if (!verificationMap.has(item.valid_until)) verificationMap.set(item.valid_until, []);
+      verificationMap.get(item.valid_until).push(item);
+    });
+
+    // Карта для бронирований
+    const bookedMap = new Map();
+    state.instruments.forEach((item) => {
+      if (!item.booked_by || !item.booked_date) return;
+      if (!bookedMap.has(item.booked_date)) bookedMap.set(item.booked_date, []);
+      bookedMap.get(item.booked_date).push(item);
     });
 
     const first = new Date(y, m, 1);
@@ -26,14 +35,26 @@ export function showCalendar() {
 
     for (let d = 1; d <= days; d++) {
       const key = y + '-' + pad(m + 1) + '-' + pad(d);
-      const events = map.get(key) || [];
+      const verificationEvents = verificationMap.get(key) || [];
+      const bookedEvents = bookedMap.get(key) || [];
       const isToday = (y === today.getFullYear() && m === today.getMonth() && d === today.getDate());
+      
       let classes = 'day';
       if (isToday) classes += ' today';
-      if (events.length) classes += ' event';
-      const title = events.map((i) => i.name).join(', ');
-      const click = events.length ? `onclick="window._showEvents('${key}')"` : '';
-      grid += `<div class="${classes}" ${click} title="${title}">${d}</div>`;
+      if (verificationEvents.length) classes += ' event';
+      if (bookedEvents.length) classes += ' booked';
+      
+      let click = '';
+      const titles = [];
+      if (verificationEvents.length) titles.push('Поверка: ' + verificationEvents.map(i => i.name).join(', '));
+      if (bookedEvents.length) titles.push('Бронь: ' + bookedEvents.map(i => i.name + ' (' + i.booked_by + ')').join(', '));
+      
+      if (verificationEvents.length || bookedEvents.length) {
+        const dateStr = key;
+        click = `onclick="window._showDayEvents('${dateStr}')"`;
+      }
+      
+      grid += `<div class="${classes}" ${click} title="${titles.join('; ')}">${d}</div>`;
     }
     return grid;
   }
@@ -51,17 +72,29 @@ export function showCalendar() {
     `;
   }
 
-  window._showEvents = (dateStr) => {
-    const instruments = state.instruments.filter((inst) => inst.valid_until === dateStr);
+  window._showDayEvents = (dateStr) => {
+    // Получаем приборы с поверкой и бронированием на эту дату
+    const instruments = state.instruments.filter((inst) => {
+      return inst.valid_until === dateStr || (inst.booked_date === dateStr && inst.booked_by);
+    });
     if (!instruments.length) return;
-    const list = instruments.map((i) =>
-      `<div class="row"><span>#${i.id} ${i.name}</span><span class="badge ok">срок истекает</span></div>`
-    ).join('');
-    openModal(`Приборы с истекающим сроком (${dateStr})`, `<div class="list">${list}</div>`);
+    
+    let listHtml = '';
+    instruments.forEach((inst) => {
+      let info = `#${inst.id} ${inst.name}`;
+      if (inst.booked_date === dateStr && inst.booked_by) {
+        info += ` (забронирован: ${inst.booked_by})`;
+      } else if (inst.valid_until === dateStr) {
+        info += ` (срок поверки)`;
+      }
+      listHtml += `<div class="row"><span>${info}</span></div>`;
+    });
+    
+    openModal(`События на ${dateStr}`, `<div class="list">${listHtml}</div>`);
   };
 
   const content = renderMonth(currentYear, currentMonth);
-  openModal('Календарь поверок', content);
+  openModal('Календарь', content);
 
   const modal = document.getElementById('modal');
   const head = modal.querySelector('.modal-head');
