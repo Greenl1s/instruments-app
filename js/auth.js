@@ -3,6 +3,7 @@ import { $, formData } from './utils.js';
 import { saveWorkbook } from './excel.js';
 import { closeModal, input, openModal, select, toast } from './ui.js';
 
+// Чтение сессии из sessionStorage
 export function readSession() {
   try { return JSON.parse(sessionStorage.getItem('instrumentUser')); } catch { return null; }
 }
@@ -11,16 +12,20 @@ export function hasRole(role) {
   return state.currentUser && state.currentUser.role === role;
 }
 
+// Логин: извлекаем пользователя, сохраняем все поля, включая extra, в сессию
 export function login(username, password) {
   username = String(username || '').trim();
   password = String(password || '').trim();
-  const user = state.users.find((u) => String(u.username || '').trim() === username && String(u.password || '').trim() === password);
+  const user = state.users.find((u) => 
+    String(u.username || '').trim() === username && 
+    String(u.password || '').trim() === password
+  );
   if (!user) return false;
-  // Сохраняем в сессию все поля пользователя, включая extra
+  
   state.currentUser = {
     username: String(user.username).trim(),
     role: user.role === 'admin' ? 'admin' : 'employee',
-    extra: user.extra || '' // добавляем дополнительную информацию
+    extra: user.extra || '' // ← здесь подгружается доп. информация
   };
   sessionStorage.setItem('instrumentUser', JSON.stringify(state.currentUser));
   return true;
@@ -31,6 +36,7 @@ export function logout() {
   sessionStorage.removeItem('instrumentUser');
 }
 
+// Гарантируем наличие admin
 export async function ensureDefaultAdmin() {
   const hasAdmin = state.users.some((u) => String(u.username || '').trim() === 'admin');
   if (hasAdmin) return;
@@ -38,25 +44,30 @@ export async function ensureDefaultAdmin() {
   await saveWorkbook('Добавлен пользователь admin/admin');
 }
 
+// Форма добавления/редактирования пользователя (здесь поле extra!)
 export function showUserForm(user = null, afterSave = () => {}) {
   const values = user || { role: 'employee', extra: '' };
   openModal(user ? 'Изменить пользователя' : 'Добавить пользователя',
-    '<form id="userForm" class="form-grid">' +
-    input('username', 'Логин', values.username, 'text', true) +
-    input('password', 'Пароль', values.password, 'text', true) +
-    select('role', 'Роль', values.role, [['employee', 'Пользователь'], ['admin', 'Администратор']]) +
-    input('extra', 'Доп. информация (телефон, email и т.д.)', values.extra, 'text') +
-    '<div class="modal-actions"><button class="primary" type="submit">Сохранить</button></div></form>'
+    `<form id="userForm" class="form-grid">
+      ${input('username', 'Логин', values.username, 'text', true)}
+      ${input('password', 'Пароль', values.password, 'text', true)}
+      ${select('role', 'Роль', values.role, [['employee', 'Пользователь'], ['admin', 'Администратор']])}
+      ${input('extra', 'Доп. информация (телефон, email и т.д.)', values.extra, 'text')}
+      <div class="modal-actions"><button class="primary" type="submit">Сохранить</button></div>
+    </form>`
   );
-  $('userForm').onsubmit = async (event) => {
+  
+  document.getElementById('userForm').onsubmit = async (event) => {
     event.preventDefault();
     const data = formData(event.target);
-    if (state.users.some((u) => u !== user && u.username === data.username)) return toast('Такой логин уже есть', true);
+    if (state.users.some((u) => u !== user && u.username === data.username)) 
+      return toast('Такой логин уже есть', true);
     if (user) Object.assign(user, data);
     else state.users.push(data);
     closeModal();
     await saveWorkbook('Пользователь сохранен');
-    // Если редактируем себя – обновляем сессию
+    
+    // Если мы редактируем сами себя – обновляем сессию
     if (state.currentUser && state.currentUser.username === data.username) {
       state.currentUser.extra = data.extra;
       sessionStorage.setItem('instrumentUser', JSON.stringify(state.currentUser));
@@ -64,6 +75,8 @@ export function showUserForm(user = null, afterSave = () => {}) {
     afterSave();
   };
 }
+
+// Менеджер пользователей (вызов showUserForm для создания/редактирования)
 
 export function showUsersManager() {
   const rows = state.users.map((u) =>
