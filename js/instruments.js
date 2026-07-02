@@ -37,11 +37,13 @@ export function verificationBadge(dateText) {
 }
 
 export function conditionText(value) {
-  return { free: 'Свободен', busy: 'Занят', retired: 'Списан' }[normalizeCondition(value)];
+  const cond = normalizeCondition(value);
+  return { free: 'Свободен', busy: 'Занят', retired: 'Списан', booked: 'Забронирован' }[cond];
 }
 
 export function conditionBadge(value) {
-  return { free: 'ok', busy: 'warn', retired: 'bad' }[normalizeCondition(value)];
+  const cond = normalizeCondition(value);
+  return { free: 'ok', busy: 'warn', retired: 'bad', booked: 'warn' }[cond];
 }
 
 // ========== Фильтрация и отрисовка списка ==========
@@ -111,13 +113,15 @@ export function renderCard(id, goList) {
   const isAdmin = state.currentUser.role === 'admin';
   const isTaken = Boolean(item.taken_by);
   const isOwner = item.taken_by === state.currentUser.username;
+  const isBooked = Boolean(item.booked_by);
+  const isBookedByMe = item.booked_by === state.currentUser.username;
   const isRetiredFlag = isRetired || item.condition === 'retired';
+  const isFree = !isTaken && !isBooked && !isRetiredFlag;
 
   let mainButtons = '';
   let adminButtons = '';
 
   if (isRetiredFlag) {
-    // Для списанных приборов - только восстановить, копировать, редактировать
     mainButtons += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
       mainButtons += '<button class="primary" data-restore>Восстановить</button>';
@@ -125,18 +129,36 @@ export function renderCard(id, goList) {
       adminButtons += '<button class="danger" data-delete>Удалить</button>';
     }
   } else {
-    if (!isTaken) {
+    // Активный прибор
+    if (isFree) {
+      // Свободен – показываем "Взять" и "Забронировать"
       mainButtons += '<button class="primary" data-issue>Взять</button>';
-    } else if (isTaken && (isOwner || isAdmin)) {
-      mainButtons += '<button class="primary" data-return>Вернуть</button>';
-      if (isOwner) mainButtons += '<button class="secondary" data-transfer>Передать</button>';
+      mainButtons += '<button class="secondary" data-book>Забронировать</button>';
+    } else if (isBooked) {
+      // Забронирован – показываем "Отменить бронирование" (только для того, кто забронировал) и "Подтвердить бронирование" (для админа или того же пользователя)
+      if (isBookedByMe || isAdmin) {
+        mainButtons += '<button class="danger" data-cancel-booking>Отменить бронирование</button>';
+        mainButtons += '<button class="primary" data-confirm-booking>Подтвердить бронирование</button>';
+      } else {
+        // Забронирован другим – только просмотр
+        mainButtons += '<span class="badge warn">Забронирован</span>';
+      }
+    } else if (isTaken) {
+      // Взят
+      if (isOwner || isAdmin) {
+        mainButtons += '<button class="primary" data-return>Вернуть</button>';
+        if (isOwner) mainButtons += '<button class="secondary" data-transfer>Передать</button>';
+      } else {
+        mainButtons += '<span class="badge warn">Занят</span>';
+      }
     }
+    // Общие кнопки
     mainButtons += '<button class="secondary" data-qr>QR</button>';
     mainButtons += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
       mainButtons += '<button class="secondary" data-edit>Редактировать</button>';
     }
-    if (isAdmin) {
+    if (isAdmin && !isRetiredFlag) {
       adminButtons += '<button class="danger" data-retire>Списать</button>';
       adminButtons += '<button class="danger" data-delete>Удалить</button>';
     }
@@ -152,6 +174,16 @@ export function renderCard(id, goList) {
     actionsHtml += `<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">${adminButtons}<span style="flex:1"></span>${backButton}</div>`;
   } else {
     actionsHtml += `<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; justify-content:flex-end;">${backButton}</div>`;
+  }
+
+  let extraFields = '';
+  if (isBooked) {
+    extraFields = `<div class="issued" style="background:#fee2e2;border-color:#fda29b;">
+      ${field('Забронировал', item.booked_by)}
+      ${field('Дата бронирования', item.booked_date)}
+    </div>`;
+  } else if (isTaken) {
+    extraFields = `<div class="issued">${field('Кто взял', item.taken_by)}${field('Место', item.taken_where)}${field('Доп.данные', item.taken_extra)}${field('Дата выдачи', item.taken_date)}</div>`;
   }
 
   document.getElementById('cardScreen').innerHTML =
@@ -170,7 +202,7 @@ export function renderCard(id, goList) {
         ${field('Действительно до', item.valid_until)}
         ${field('Документ', item.document_url ? `<a href="${escapeAttr(item.document_url)}" target="_blank" rel="noopener">Открыть</a>` : '—', true)}
       </div>
-      ${isTaken ? `<div class="issued">${field('Кто взял', item.taken_by)}${field('Место', item.taken_where)}${field('Доп.данные', item.taken_extra)}${field('Дата выдачи', item.taken_date)}</div>` : ''}
+      ${extraFields}
       ${actionsHtml}
     </article>`;
 
@@ -178,24 +210,18 @@ export function renderCard(id, goList) {
 }
 
 function bindCardActions(item, goList, isRetired) {
-  console.log('=== bindCardActions ===');
-  console.log('item:', item);
-  console.log('isRetired:', isRetired);
-  
   const root = document.getElementById('cardScreen');
   const b = (s, fn) => {
     const n = root.querySelector(s);
-    if (n) {
-      console.log(`Найден элемент с селектором "${s}"`);
-      n.onclick = fn;
-    } else {
-      console.warn(`Элемент с селектором "${s}" не найден`);
-    }
+    if (n) n.onclick = fn;
   };
   b('[data-back]', goList);
   b('[data-issue]', () => showTakeForm(item));
   b('[data-return]', () => returnInstrument(item));
   b('[data-transfer]', () => showTransferForm(item));
+  b('[data-book]', () => showBookForm(item));
+  b('[data-cancel-booking]', () => cancelBooking(item));
+  b('[data-confirm-booking]', () => confirmBooking(item));
   b('[data-edit]', () => showInstrumentForm(item));
   b('[data-retire]', () => retireInstrument(item, goList));
   b('[data-restore]', () => restoreRetiredItem(item, goList));
@@ -219,7 +245,7 @@ export function showInstrumentForm(item = null) {
       ${input('verification_date', 'Дата поверки/калибровки', v.verification_date, 'date')}
       ${input('valid_until', 'Действительно до', v.valid_until, 'date')}
       ${input('document_url', 'Ссылка на документ', v.document_url, 'url')}
-      ${select('condition', 'Состояние', v.condition, [['free', 'Свободен'], ['busy', 'Занят'], ['retired', 'Списан']])}
+      ${select('condition', 'Состояние', v.condition, [['free', 'Свободен'], ['busy', 'Занят'], ['booked', 'Забронирован'], ['retired', 'Списан']])}
       ${isEdit ? input('taken_extra', 'Доп. данные при выдаче', v.taken_extra || '', 'text') : ''}
       <div class="modal-actions"><button class="primary" type="submit">Сохранить</button></div>
     </form>`);
@@ -237,7 +263,7 @@ export function showInstrumentForm(item = null) {
   };
 }
 
-// ========== ВЗЯТЬ ПРИБОР (с подстановкой extra из профиля) ==========
+// ========== ВЗЯТЬ ПРИБОР ==========
 
 function showTakeForm(item) {
   const userExtra = state.currentUser?.extra || '';
@@ -259,7 +285,9 @@ function showTakeForm(item) {
     const data = formData(event.target);
     Object.assign(item, data, {
       taken_by: state.currentUser.username,
-      condition: 'busy'
+      condition: 'busy',
+      booked_by: '',
+      booked_date: ''
     });
     addHistoryEntry(item);
     closeModal();
@@ -268,7 +296,7 @@ function showTakeForm(item) {
   };
 }
 
-// ========== ВОЗВРАТ (очищаем taken_extra) ==========
+// ========== ВОЗВРАТ ==========
 
 async function returnInstrument(item) {
   item.condition = 'free';
@@ -277,11 +305,13 @@ async function returnInstrument(item) {
   item.taken_where = '';
   item.taken_extra = '';
   item.taken_date = '';
+  item.booked_by = '';
+  item.booked_date = '';
   await saveWorkbook('Прибор возвращен');
   window.dispatchEvent(new Event('app:refresh-route'));
 }
 
-// ========== ПЕРЕДАЧА (редактируем taken_extra) ==========
+// ========== ПЕРЕДАЧА ==========
 
 function showTransferForm(item) {
   openModal('Передать прибор',
@@ -304,7 +334,64 @@ function showTransferForm(item) {
   };
 }
 
-// ========== СПИСАТЬ (с добавлением 0 к ID) ==========
+// ========== БРОНИРОВАНИЕ ==========
+
+function showBookForm(item) {
+  openModal('Забронировать прибор',
+    `<form id="bookForm" class="form-grid">
+      <div class="field">
+        <div class="field-label">Кто бронирует</div>
+        <div class="field-value">${escapeHtml(state.currentUser.username)}</div>
+      </div>
+      ${input('booked_date', 'Дата бронирования', today(), 'date', true)}
+      <div class="modal-actions"><button class="primary" type="submit">Забронировать</button></div>
+    </form>`);
+
+  document.getElementById('bookForm').onsubmit = async (event) => {
+    event.preventDefault();
+    const data = formData(event.target);
+    if (!data.booked_date) return toast('Выберите дату', true);
+    // Проверяем, не забронирован ли уже на эту дату (можно опционально)
+    item.booked_by = state.currentUser.username;
+    item.booked_date = data.booked_date;
+    item.condition = 'booked';
+    closeModal();
+    await saveWorkbook('Прибор забронирован');
+    window.dispatchEvent(new Event('app:refresh-route'));
+  };
+}
+
+// ========== ОТМЕНА БРОНИРОВАНИЯ ==========
+
+async function cancelBooking(item) {
+  if (!confirm('Отменить бронирование?')) return;
+  item.booked_by = '';
+  item.booked_date = '';
+  item.condition = 'free';
+  await saveWorkbook('Бронирование отменено');
+  window.dispatchEvent(new Event('app:refresh-route'));
+}
+
+// ========== ПОДТВЕРЖДЕНИЕ БРОНИРОВАНИЯ (перевод в "взят") ==========
+
+async function confirmBooking(item) {
+  if (!confirm('Подтвердить бронирование и выдать прибор?')) return;
+  // Переводим в статус "взят"
+  const now = today();
+  item.taken_by = item.booked_by;
+  item.taken_date = now;
+  item.taken_where = ''; // можно запросить место, но для простоты оставим пустым
+  item.taken_extra = '';
+  item.condition = 'busy';
+  // Очищаем поля бронирования
+  item.booked_by = '';
+  item.booked_date = '';
+  addHistoryEntry(item);
+  await saveWorkbook('Бронирование подтверждено, прибор выдан');
+  window.dispatchEvent(new Event('app:refresh-route'));
+}
+
+// ========== СПИСАТЬ ==========
 
 async function retireInstrument(item, goList) {
   if (!confirm('Списать прибор?')) return;
@@ -317,7 +404,9 @@ async function retireInstrument(item, goList) {
     ...item,
     id: newId,
     condition: 'retired',
-    retired_date: today()
+    retired_date: today(),
+    booked_by: '',
+    booked_date: ''
   };
   state.retired.push(retiredItem);
   state.instruments = state.instruments.filter((row) => row !== item);
@@ -345,7 +434,9 @@ export async function restoreRetiredItem(item, goList) {
     taken_by: '',
     taken_where: '',
     taken_extra: '',
-    taken_date: ''
+    taken_date: '',
+    booked_by: '',
+    booked_date: ''
   };
   delete restored.retired_date;
   state.instruments.push(restored);
@@ -354,42 +445,19 @@ export async function restoreRetiredItem(item, goList) {
   else window.dispatchEvent(new Event('app:refresh-route'));
 }
 
-// ========== УДАЛИТЬ (активный или списанный) ==========
+// ========== УДАЛИТЬ ==========
 
 async function deleteInstrument(item, goList) {
-  console.log('=== deleteInstrument вызвана ===');
-  console.log('item:', item);
-  console.log('state.retired:', state.retired);
-  
-  // Проверяем, есть ли прибор в списанных (по ссылке)
-  const isRetiredByRef = state.retired.some((i) => i === item);
-  // Также проверим по ID и condition
-  const isRetiredById = state.retired.some((i) => String(i.id) === String(item.id));
-  const isRetiredByCondition = item.condition === 'retired';
-  
-  console.log('isRetiredByRef:', isRetiredByRef);
-  console.log('isRetiredById:', isRetiredById);
-  console.log('isRetiredByCondition:', isRetiredByCondition);
-  
-  const isRetired = isRetiredByRef || isRetiredById || isRetiredByCondition;
-  
+  const isRetired = state.retired.some((i) => i === item);
   if (!confirm('Удалить прибор без возможности восстановления?')) return;
-  
   if (isRetired) {
-    console.log('Удаляем из списанных');
-    state.retired = state.retired.filter((i) => String(i.id) !== String(item.id));
-    console.log('После удаления state.retired:', state.retired);
-    
-    // Закрываем модалку, если она открыта
+    state.retired = state.retired.filter((i) => i !== item);
     const modal = document.getElementById('modal');
     if (modal && modal.open) modal.close();
-    
     await saveWorkbook('Прибор удалён из списанных');
-    console.log('Сохранено, переходим к списку');
     goList();
   } else {
-    console.log('Удаляем из активных');
-    state.instruments = state.instruments.filter((i) => String(i.id) !== String(item.id));
+    state.instruments = state.instruments.filter((i) => i !== item);
     await saveWorkbook('Прибор удалён');
     goList();
   }
