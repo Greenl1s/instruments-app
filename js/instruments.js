@@ -177,15 +177,16 @@ export function renderCard(id, goList) {
   }
 
   let extraFields = '';
-  if (isBooked) {
-    extraFields = `<div class="issued" style="background:#fee2e2;border-color:#fda29b;">
-      ${field('Забронировал', item.booked_by)}
-      ${field('Дата бронирования', item.booked_date)}
-    </div>`;
-  } else if (isTaken) {
-    extraFields = `<div class="issued">${field('Кто взял', item.taken_by)}${field('Место', item.taken_where)}${field('Доп.данные', item.taken_extra)}${field('Дата выдачи', item.taken_date)}</div>`;
-  }
-
+if (isBooked) {
+  extraFields = `<div class="issued" style="background:#fee2e2;border-color:#fda29b;">
+    ${field('Забронировал', item.booked_by)}
+    ${field('Дата бронирования', item.booked_date)}
+    ${field('Доп. информация', item.booked_extra || '—')}
+  </div>`;
+} else if (isTaken) {
+  extraFields = `<div class="issued">${field('Кто взял', item.taken_by)}${field('Место', item.taken_where)}${field('Доп.данные', item.taken_extra)}${field('Дата выдачи', item.taken_date)}</div>`;
+} 
+  
   document.getElementById('cardScreen').innerHTML =
     `<article class="panel card">
       <h1>${escapeHtml(item.name || 'Без названия')}</h1>
