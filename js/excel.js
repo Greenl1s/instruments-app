@@ -105,10 +105,3 @@ export function normalizeCondition(value) {
   return 'free';
 }
 
-.day.booked {
-  background: #fee2e2;
-  color: #b42318;
-  border: 1px solid #fda29b;
-  font-weight: 800;
-  cursor: pointer;
-}
