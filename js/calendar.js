@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { pad, escapeHtml } from './utils.js';
+import { pad } from './utils.js';
 import { openModal, closeModal } from './ui.js';
 
 export function showCalendar() {
@@ -7,7 +7,7 @@ export function showCalendar() {
   let currentMonth = new Date().getMonth();
 
   function renderCalendar(y, m) {
-    // Карта для поверок
+    // Карта для сроков поверки
     const verificationMap = new Map();
     state.instruments.forEach((item) => {
       if (!item.valid_until) return;
@@ -43,126 +43,52 @@ export function showCalendar() {
 
     for (let d = 1; d <= days; d++) {
       const key = y + '-' + pad(m + 1) + '-' + pad(d);
-      const verificationEvents = verificationMap.get(key) || [];
-      const bookedEvents = bookedMap.get(key) || [];
-      const takenEvents = takenMap.get(key) || [];
-      
-      const hasVerification = verificationEvents.length > 0;
-      const hasBooked = bookedEvents.length > 0;
-      const hasTaken = takenEvents.length > 0;
-      
+      const hasVerification = verificationMap.has(key) && verificationMap.get(key).length > 0;
+      const hasBooked = bookedMap.has(key) && bookedMap.get(key).length > 0;
+      const hasTaken = takenMap.has(key) && takenMap.get(key).length > 0;
       const isToday = (y === today.getFullYear() && m === today.getMonth() && d === today.getDate());
-      
+
       let classes = 'day';
       if (isToday) classes += ' today';
       
-      // Определяем цвет
-      let eventType = '';
-      if (hasVerification && hasBooked && hasTaken) {
-        classes += ' all'; // фиолетовый
-        eventType = 'all';
-      } else if ((hasVerification && hasBooked) || (hasVerification && hasTaken) || (hasBooked && hasTaken)) {
-        classes += ' mixed'; // оранжевый
-        eventType = 'mixed';
-      } else if (hasBooked) {
-        classes += ' booked'; // красный
-        eventType = 'booked';
-      } else if (hasTaken) {
-        classes += ' taken'; // синий
-        eventType = 'taken';
-      } else if (hasVerification) {
-        classes += ' event'; // зелёный
-        eventType = 'verification';
+      // Определяем цвет в зависимости от комбинации
+      let colorClass = '';
+      const count = [hasVerification, hasBooked, hasTaken].filter(Boolean).length;
+      if (count === 3) {
+        colorClass = 'purple'; // все три
+      } else if (count === 2) {
+        if (hasBooked && hasTaken) colorClass = 'orange';
+        else if (hasBooked && hasVerification) colorClass = 'orange';
+        else if (hasTaken && hasVerification) colorClass = 'orange';
+      } else if (count === 1) {
+        if (hasVerification) colorClass = 'green';
+        else if (hasBooked) colorClass = 'red';
+        else if (hasTaken) colorClass = 'blue';
       }
-      
+      if (colorClass) classes += ' ' + colorClass;
+
       let click = '';
       if (hasVerification || hasBooked || hasTaken) {
         const dateStr = key;
         click = `onclick="window._showDayEvents('${dateStr}')"`;
       }
-      
-      // Подсказка при наведении
-      let titleParts = [];
-      if (hasVerification) titleParts.push('Поверка: ' + verificationEvents.map(i => i.name).join(', '));
-      if (hasBooked) titleParts.push('Бронь: ' + bookedEvents.map(i => i.name + ' (' + i.booked_by + ')').join(', '));
-      if (hasTaken) titleParts.push('Выдано: ' + takenEvents.map(i => i.name + ' (' + i.taken_by + ')').join(', '));
-      
-      grid += `<div class="${classes}" ${click} title="${titleParts.join('; ')}">${d}</div>`;
+
+      grid += `<div class="${classes}" ${click} title="${getTooltip(hasVerification, hasBooked, hasTaken)}">${d}</div>`;
     }
     return grid;
   }
 
-  // Глобальная функция для показа событий дня
-  window._showDayEvents = (dateStr) => {
-    const verificationEvents = state.instruments.filter(i => i.valid_until === dateStr);
-    const bookedEvents = state.instruments.filter(i => i.booked_date === dateStr && i.booked_by);
-    const takenEvents = state.instruments.filter(i => i.taken_date === dateStr && i.taken_by);
-
-    let html = '<div class="day-events">';
-    
-    if (takenEvents.length) {
-      html += `<h3>Выданы:</h3>`;
-      takenEvents.forEach(item => {
-        html += `<div class="row panel" style="cursor:pointer;" onclick="window._openInstrument('${item.id}')">
-          <span>#${escapeHtml(item.id)} ${escapeHtml(item.name)}</span>
-          <span class="badge ok">Выдача: ${escapeHtml(item.taken_by)}</span>
-        </div>`;
-      });
-    }
-    
-    if (bookedEvents.length) {
-      html += `<h3>Бронирование:</h3>`;
-      bookedEvents.forEach(item => {
-        html += `<div class="row panel" style="cursor:pointer;" onclick="window._openInstrument('${item.id}')">
-          <span>#${escapeHtml(item.id)} ${escapeHtml(item.name)}</span>
-          <span class="badge warn">Бронирование: ${escapeHtml(item.booked_by)}</span>
-        </div>`;
-      });
-    }
-    
-    if (verificationEvents.length) {
-      html += `<h3>Истекает срок:</h3>`;
-      verificationEvents.forEach(item => {
-        html += `<div class="row panel" style="cursor:pointer;" onclick="window._openInstrument('${item.id}')">
-          <span>#${escapeHtml(item.id)} ${escapeHtml(item.name)}</span>
-          <span class="badge bad">Поверка</span>
-        </div>`;
-      });
-    }
-    
-    html += '</div>';
-    
-    // Добавляем кнопку "Назад"
-    html += `<div class="modal-actions"><button class="secondary" data-close>Назад</button></div>`;
-    
-    openModal(`События на ${dateStr}`, html);
-  };
-
-  // Функция для открытия карточки прибора из модалки
-  window._openInstrument = (id) => {
-    closeModal();
-    // Переход на карточку прибора
-    history.pushState(null, '', '?id=' + encodeURIComponent(id));
-    window.dispatchEvent(new Event('popstate'));
-  };
-
-  function renderLegend() {
-    return `
-      <div style="margin-top:16px; padding:12px; background:#f8fafc; border-radius:8px; border:1px solid #d9e0ea; display:flex; flex-wrap:wrap; gap:12px; align-items:center; font-size:14px;">
-        <span style="font-weight:800;">Легенда:</span>
-        <span><span class="day" style="display:inline-block; width:20px; height:20px; background:#dcfae6; border:1px solid #75e0a7; border-radius:4px;"></span> Срок истекает</span>
-        <span><span class="day" style="display:inline-block; width:20px; height:20px; background:#fee2e2; border:1px solid #fda29b; border-radius:4px;"></span> Бронь</span>
-        <span><span class="day" style="display:inline-block; width:20px; height:20px; background:#dbeafe; border:1px solid #93c5fd; border-radius:4px;"></span> Выдача</span>
-        <span><span class="day" style="display:inline-block; width:20px; height:20px; background:#fef3c7; border:1px solid #fcd34d; border-radius:4px;"></span> Смешанный день</span>
-        <span><span class="day" style="display:inline-block; width:20px; height:20px; background:#e9d5ff; border:1px solid #c084fc; border-radius:4px;"></span> Все события</span>
-      </div>
-    `;
+  function getTooltip(hasVerification, hasBooked, hasTaken) {
+    const parts = [];
+    if (hasVerification) parts.push('срок истекает');
+    if (hasBooked) parts.push('бронь');
+    if (hasTaken) parts.push('выдача');
+    return parts.join(', ');
   }
 
   function renderMonth(y, m) {
     const monthName = new Date(y, m).toLocaleString('ru', { month: 'long', year: 'numeric' });
     const grid = renderCalendar(y, m);
-    const legend = renderLegend();
     return `
       <div class="calendar-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <button class="secondary" data-cal-prev>◀</button>
@@ -170,9 +96,60 @@ export function showCalendar() {
         <button class="secondary" data-cal-next>▶</button>
       </div>
       <div class="calendar-grid">${grid}</div>
-      ${legend}
+      <div class="calendar-legend" style="display:flex; gap:12px; margin-top:12px; flex-wrap:wrap; justify-content:center; font-size:12px;">
+        <span><span class="badge red" style="background:#fee2e2;color:#b42318;">Красный</span> — только бронь</span>
+        <span><span class="badge green" style="background:#dcfae6;color:#067647;">Зелёный</span> — срок истекает</span>
+        <span><span class="badge blue" style="background:#dbeafe;color:#1e40af;">Синий</span> — только выдача</span>
+        <span><span class="badge orange" style="background:#ffedd5;color:#b45309;">Оранжевый</span> — бронь + выдача / бронь + поверка / выдача + поверка</span>
+        <span><span class="badge purple" style="background:#ede9fe;color:#6b21a8;">Фиолетовый</span> — все три</span>
+      </div>
     `;
   }
+
+  window._showDayEvents = (dateStr) => {
+    const verificationItems = state.instruments.filter(inst => inst.valid_until === dateStr);
+    const bookedItems = state.instruments.filter(inst => inst.booked_date === dateStr && inst.booked_by);
+    const takenItems = state.instruments.filter(inst => inst.taken_date === dateStr && inst.taken_by);
+
+    let html = '';
+    if (takenItems.length) {
+      html += `<div style="margin-top:6px;"><b>Выданы:</b></div>`;
+      takenItems.forEach(inst => {
+        html += `<div class="row">#${inst.id} ${inst.name} (Выдача: ${inst.taken_by})</div>`;
+      });
+    }
+    if (bookedItems.length) {
+      html += `<div style="margin-top:6px;"><b>Бронирование:</b></div>`;
+      bookedItems.forEach(inst => {
+        html += `<div class="row">#${inst.id} ${inst.name} (Бронирование: ${inst.booked_by})</div>`;
+      });
+    }
+    if (verificationItems.length) {
+      html += `<div style="margin-top:6px;"><b>Истекает срок:</b></div>`;
+      verificationItems.forEach(inst => {
+        html += `<div class="row">#${inst.id} ${inst.name} (Поверка)</div>`;
+      });
+    }
+    if (!html) {
+      html = '<div>Нет событий</div>';
+    }
+
+    // Добавляем кнопку "Назад"
+    html += `<div class="modal-actions"><button class="secondary" data-back-to-calendar>Назад</button></div>`;
+
+    openModal(`События на ${dateStr}`, `<div class="list">${html}</div>`);
+
+    // Обработчик кнопки "Назад"
+    const modal = document.getElementById('modal');
+    const backBtn = modal.querySelector('[data-back-to-calendar]');
+    if (backBtn) {
+      backBtn.onclick = () => {
+        closeModal();
+        // Переоткрываем календарь (чтобы вернуться к тому же месяцу)
+        showCalendar();
+      };
+    }
+  };
 
   const content = renderMonth(currentYear, currentMonth);
   openModal('Календарь', content);
@@ -180,12 +157,9 @@ export function showCalendar() {
   const modal = document.getElementById('modal');
   const head = modal.querySelector('.modal-head');
 
-  // Обработка закрытия модалки через кнопку "Закрыть" (крестик) - не трогаем, оставляем стандартное поведение
-
   function updateCalendar() {
     const body = modal.querySelector('.modal-body');
     const children = body.children;
-    // Удаляем всё, кроме заголовка (head)
     for (let i = children.length - 1; i >= 0; i--) {
       if (children[i] !== head) children[i].remove();
     }
