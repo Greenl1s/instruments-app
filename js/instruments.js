@@ -97,16 +97,13 @@ export function renderList(openCard) {
 // ========== Карточка прибора ==========
 
 export function renderCard(id, goList) {
-  // Ищем прибор в основном списке
   let item = state.instruments.find((i) => String(i.id) === String(id));
   let isRetired = false;
-  // Если не нашли – ищем в списанных
   if (!item) {
     item = state.retired.find((i) => String(i.id) === String(id));
     isRetired = true;
   }
 
-  // Переключаем экраны
   document.getElementById('listScreen').classList.add('hidden');
   document.getElementById('cardScreen').classList.remove('hidden');
 
@@ -125,16 +122,17 @@ export function renderCard(id, goList) {
   const isRetiredFlag = isRetired || item.condition === 'retired';
   const isFree = !isTaken && !isBooked && !isRetiredFlag;
 
-  // ---------- БЛОК ФОТО ----------
+  // ===== БЛОК ФОТО (динамический) =====
   let photoHtml = '';
   if (item.photo_url) {
-    photoHtml = `<div style="text-align: center; margin-bottom: 16px;">
+    photoHtml = `<div style="text-align: center; margin-bottom: 16px; cursor: pointer;" onclick="window.open('${escapeAttr(item.photo_url)}', '_blank')">
       <img src="${escapeAttr(item.photo_url)}" alt="Фото прибора"
-           style="max-width: 100%; max-height: 300px; border-radius: var(--radius); object-fit: contain; border: 1px solid var(--line);">
+           style="max-width: 100%; max-height: 500px; border-radius: var(--radius); object-fit: contain; border: 1px solid var(--line); background: var(--panel);"
+           onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'padding:20px;color:var(--muted);text-align:center;\\'>Фото не загружено<br><small>Нажмите, чтобы открыть ссылку</small></div>';">
     </div>`;
   }
 
-  // ---------- КНОПКИ ----------
+  // ===== КНОПКИ =====
   let mainButtons = '';
   let adminButtons = '';
 
@@ -146,7 +144,6 @@ export function renderCard(id, goList) {
       adminButtons += '<button class="danger" data-delete>Удалить</button>';
     }
   } else {
-    // Активный прибор
     if (isFree) {
       mainButtons += '<button class="primary" data-issue>Взять</button>';
       mainButtons += '<button class="secondary" data-book>Забронировать</button>';
@@ -166,7 +163,6 @@ export function renderCard(id, goList) {
       }
     }
 
-    // Общие кнопки для активных приборов
     mainButtons += '<button class="secondary" data-qr>QR</button>';
     mainButtons += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
@@ -190,7 +186,7 @@ export function renderCard(id, goList) {
     actionsHtml += `<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; justify-content:flex-end;">${backButton}</div>`;
   }
 
-  // ---------- ДОП. ПОЛЯ (занят или забронирован) ----------
+  // ===== ДОП. ПОЛЯ =====
   let extraFields = '';
   if (isBooked) {
     extraFields = `<div class="issued" style="background:#fee2e2;border-color:#fda29b;">
@@ -202,7 +198,7 @@ export function renderCard(id, goList) {
     extraFields = `<div class="issued">${field('Кто взял', item.taken_by)}${field('Место', item.taken_where)}${field('Доп.данные', item.taken_extra)}${field('Дата выдачи', item.taken_date)}</div>`;
   }
 
-  // ---------- СБОРКА HTML ----------
+  // ===== СБОРКА HTML =====
   document.getElementById('cardScreen').innerHTML =
     `<article class="panel card">
       ${photoHtml}
@@ -219,13 +215,12 @@ export function renderCard(id, goList) {
         ${field('Дата поверки/калибровки', item.verification_date)}
         ${field('Действительно до', item.valid_until)}
         ${field('Документ', item.document_url ? `<a href="${escapeAttr(item.document_url)}" target="_blank" rel="noopener">Открыть</a>` : '—', true)}
-        ${field('Фото', item.photo_url ? `<a href="${escapeAttr(item.photo_url)}" target="_blank" rel="noopener">Открыть фото</a>` : '—', true)}
       </div>
       ${extraFields}
       ${actionsHtml}
     </article>`;
 
-  // ---------- ПРИВЯЗКА СОБЫТИЙ ----------
+  // ===== ПРИВЯЗКА СОБЫТИЙ =====
   bindCardActions(item, goList, isRetiredFlag);
 }
 
