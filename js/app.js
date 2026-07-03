@@ -7,26 +7,25 @@ import { showCalendar } from './calendar.js';
 import { openModal, toast, closeModal } from './ui.js';
 
 // ============================================================
-// Кнопка переключения темы (фиксированная, с псевдо-элементами)
+// Переключение темы (простой и надёжный вариант)
 // ============================================================
 const themeToggle = document.getElementById('themeToggle');
+const savedTheme = localStorage.getItem('theme') || 'light';
 
-if (themeToggle) {
-  const savedTheme = localStorage.getItem('theme') || 'light';
-  if (savedTheme === 'dark') {
-    document.body.classList.add('dark-theme');
-  }
-
-  themeToggle.addEventListener('click', () => {
-    themeToggle.classList.add('switching');
-    setTimeout(() => themeToggle.classList.remove('switching'), 600);
-    document.body.classList.toggle('dark-theme');
-    const isDark = document.body.classList.contains('dark-theme');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-  });
+// Устанавливаем начальную тему
+if (savedTheme === 'dark') {
+  document.body.classList.add('dark-theme');
+  themeToggle.textContent = 'Светлая';
 } else {
-  console.warn('Кнопка переключения темы не найдена в DOM');
+  themeToggle.textContent = 'Тёмная';
 }
+
+themeToggle.addEventListener('click', () => {
+  document.body.classList.toggle('dark-theme');
+  const isDark = document.body.classList.contains('dark-theme');
+  themeToggle.textContent = isDark ? 'Светлая' : 'Тёмная';
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+});
 
 // ============================================================
 // Спиннер для кнопок (внутренняя функция, не экспортируется)
