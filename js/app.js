@@ -11,15 +11,15 @@ const savedTheme = localStorage.getItem('theme') || 'light';
 
 if (savedTheme === 'dark') {
   document.body.classList.add('dark-theme');
-  themeToggle.textContent = 'Светлая';
+  themeToggle.textContent = '☀️';
 } else {
-  themeToggle.textContent = 'Тёмная';
+  themeToggle.textContent = '🌙';
 }
 
 themeToggle.addEventListener('click', () => {
   document.body.classList.toggle('dark-theme');
   const isDark = document.body.classList.contains('dark-theme');
-  themeToggle.textContent = isDark ? 'Светлая' : 'Тёмная';
+  themeToggle.textContent = isDark ? '☀️' : '🌙';
   localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
 
