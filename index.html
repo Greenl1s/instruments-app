@@ -9,7 +9,7 @@
 </head>
 <body>
   <main class="shell">
-    <!-- Auth -->
+    <!-- ===== АВТОРИЗАЦИЯ ===== -->
     <section id="authView" class="auth-view">
       <form id="loginForm" class="panel auth-panel">
         <h1>Учет приборов</h1>
@@ -20,23 +20,29 @@
       </form>
     </section>
 
-    <!-- App -->
+    <!-- ===== ОСНОВНОЕ ПРИЛОЖЕНИЕ ===== -->
     <section id="appView" class="hidden">
+      <!-- Верхняя панель -->
       <header class="topbar">
-        <div><h1>Учет приборов</h1><p id="syncStatus">Загрузка...</p></div>
+        <div>
+          <h1>Учет приборов</h1>
+          <p id="syncStatus">Загрузка...</p>
+        </div>
         <div class="topbar-actions">
           <span id="currentUserBadge" class="badge muted"></span>
-          <button id="usersButton" class="secondary admin-only" type="button">Пользователи</button>
-          <button id="profileButton" class="secondary" type="button">Профиль</button>
-          <button id="logoutButton" class="danger" type="button">Выйти</button>
+          <button id="usersButton" class="secondary admin-only" type="button">👥 Пользователи</button>
+          <button id="profileButton" class="secondary" type="button">👤 Профиль</button>
+          <button id="logoutButton" class="danger" type="button">🚪 Выйти</button>
         </div>
       </header>
 
-      <!-- Список -->
+      <!-- ===== ЭКРАН СПИСКА ===== -->
       <section id="listScreen">
         <div class="toolbar panel">
+          <!-- Поиск -->
           <input id="searchInput" class="search" placeholder="🔍 Поиск по названию, серийному номеру или модели">
-          
+
+          <!-- Фильтр: Поверка -->
           <div class="filter-group">
             <span class="filter-label">Поверка</span>
             <select id="verificationFilter">
@@ -47,6 +53,7 @@
             </select>
           </div>
 
+          <!-- Фильтр: Состояние -->
           <div class="filter-group">
             <span class="filter-label">Состояние</span>
             <select id="conditionFilter">
@@ -57,23 +64,32 @@
             </select>
           </div>
 
+          <!-- Кнопки действий (только для админа) -->
           <button id="calendarButton" class="secondary admin-only icon-btn calendar-btn" type="button">📅 Календарь</button>
           <button id="retiredButton" class="secondary admin-only icon-btn retired-btn" type="button">🗑️ Списанные</button>
           <button id="addInstrumentButton" class="primary admin-only icon-btn" type="button">➕ Добавить</button>
         </div>
+
+        <!-- Список приборов -->
         <div id="instrumentList" class="list"></div>
       </section>
 
-      <!-- Карточка -->
+      <!-- ===== ЭКРАН КАРТОЧКИ ===== -->
       <section id="cardScreen" class="hidden"></section>
     </section>
   </main>
 
+  <!-- ===== МОДАЛЬНОЕ ОКНО ===== -->
   <dialog id="modal"></dialog>
+
+  <!-- ===== TOAST-УВЕДОМЛЕНИЕ ===== -->
   <div id="toast" class="toast hidden"></div>
 
+  <!-- ===== ВНЕШНИЕ БИБЛИОТЕКИ ===== -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+  <!-- ===== ГЛАВНЫЙ СКРИПТ (с параметром версии для обновления кеша) ===== -->
   <script type="module" src="./js/app.js?v=2"></script>
 </body>
 </html>
