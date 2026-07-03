@@ -103,17 +103,13 @@ export function renderCard(id, goList) {
     item = state.retired.find((i) => String(i.id) === String(id));
     isRetired = true;
   }
-
   document.getElementById('listScreen').classList.add('hidden');
   document.getElementById('cardScreen').classList.remove('hidden');
-
   if (!item) {
-    document.getElementById('cardScreen').innerHTML =
-      `<div class="panel card">Прибор не найден<div class="actions"><button class="secondary" data-back>К списку</button></div></div>`;
+    document.getElementById('cardScreen').innerHTML = `<div class="panel card">Прибор не найден<div class="actions"><button class="secondary" data-back>К списку</button></div></div>`;
     document.getElementById('cardScreen').querySelector('[data-back]').onclick = goList;
     return;
   }
-
   const isAdmin = state.currentUser.role === 'admin';
   const isTaken = Boolean(item.taken_by);
   const isOwner = item.taken_by === state.currentUser.username;
@@ -122,17 +118,6 @@ export function renderCard(id, goList) {
   const isRetiredFlag = isRetired || item.condition === 'retired';
   const isFree = !isTaken && !isBooked && !isRetiredFlag;
 
-  // ===== БЛОК ФОТО (динамический) =====
-  let photoHtml = '';
-  if (item.photo_url) {
-    photoHtml = `<div style="text-align: center; margin-bottom: 16px; cursor: pointer;" onclick="window.open('${escapeAttr(item.photo_url)}', '_blank')">
-      <img src="${escapeAttr(item.photo_url)}" alt="Фото прибора"
-           style="max-width: 100%; max-height: 500px; border-radius: var(--radius); object-fit: contain; border: 1px solid var(--line); background: var(--panel);"
-           onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'padding:20px;color:var(--muted);text-align:center;\\'>Фото не загружено<br><small>Нажмите, чтобы открыть ссылку</small></div>';">
-    </div>`;
-  }
-
-  // ===== КНОПКИ =====
   let mainButtons = '';
   let adminButtons = '';
 
@@ -162,7 +147,6 @@ export function renderCard(id, goList) {
         mainButtons += '<span class="badge warn">Занят</span>';
       }
     }
-
     mainButtons += '<button class="secondary" data-qr>QR</button>';
     mainButtons += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
@@ -186,7 +170,6 @@ export function renderCard(id, goList) {
     actionsHtml += `<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; justify-content:flex-end;">${backButton}</div>`;
   }
 
-  // ===== ДОП. ПОЛЯ =====
   let extraFields = '';
   if (isBooked) {
     extraFields = `<div class="issued" style="background:#fee2e2;border-color:#fda29b;">
@@ -198,10 +181,8 @@ export function renderCard(id, goList) {
     extraFields = `<div class="issued">${field('Кто взял', item.taken_by)}${field('Место', item.taken_where)}${field('Доп.данные', item.taken_extra)}${field('Дата выдачи', item.taken_date)}</div>`;
   }
 
-  // ===== СБОРКА HTML =====
   document.getElementById('cardScreen').innerHTML =
     `<article class="panel card">
-      ${photoHtml}
       <h1>${escapeHtml(item.name || 'Без названия')}</h1>
       <div class="badges">
         <span class="badge ${verificationBadge(item.valid_until)}">${verificationText(item.valid_until)}</span>
@@ -220,7 +201,6 @@ export function renderCard(id, goList) {
       ${actionsHtml}
     </article>`;
 
-  // ===== ПРИВЯЗКА СОБЫТИЙ =====
   bindCardActions(item, goList, isRetiredFlag);
 }
 
@@ -249,7 +229,7 @@ function bindCardActions(item, goList, isRetired) {
 
 export function showInstrumentForm(item = null) {
   const isEdit = Boolean(item);
-  const v = item || { id: nextId(), condition: 'free', type: 'Поверка', taken_extra: '', photo_url: '' };
+  const v = item || { id: nextId(), condition: 'free', type: 'Поверка', taken_extra: '' };
   openModal(isEdit ? 'Редактировать прибор' : 'Добавить прибор',
     `<form id="instrumentForm" class="form-grid">
       ${input('id', 'ID', v.id, 'number', true)}
@@ -260,7 +240,6 @@ export function showInstrumentForm(item = null) {
       ${input('verification_date', 'Дата поверки/калибровки', v.verification_date, 'date')}
       ${input('valid_until', 'Действительно до', v.valid_until, 'date')}
       ${input('document_url', 'Ссылка на документ', v.document_url, 'url')}
-      ${input('photo_url', 'Ссылка на фото прибора', v.photo_url, 'url')}
       ${select('condition', 'Состояние', v.condition, [['free', 'Свободен'], ['busy', 'Занят'], ['booked', 'Забронирован'], ['retired', 'Списан']])}
       ${isEdit ? input('taken_extra', 'Доп. данные при выдаче', v.taken_extra || '', 'text') : ''}
       <div class="modal-actions"><button class="primary" type="submit">Сохранить</button></div>
@@ -301,9 +280,7 @@ function showTakeForm(item) {
     const data = formData(event.target);
     Object.assign(item, data, {
       taken_by: state.currentUser.username,
-      condition: 'busy',
-      booked_by: '',
-      booked_date: ''
+      condition: 'busy'
     });
     addHistoryEntry(item);
     closeModal();
@@ -392,17 +369,17 @@ async function cancelBooking(item) {
   await saveWorkbook('Бронирование отменено');
   window.dispatchEvent(new Event('app:refresh-route'));
 }
-// ========== ПОДТВЕРЖДЕНИЕ БРОНИРОВАНИЯ (перевод в "взят") ==========
+
+// ========== ПОДТВЕРЖДЕНИЕ БРОНИРОВАНИЯ ==========
 
 async function confirmBooking(item) {
   if (!confirm('Подтвердить бронирование и выдать прибор?')) return;
   const now = today();
   item.taken_by = item.booked_by;
   item.taken_date = now;
-  item.taken_where = ''; // можно запросить место, но для простоты оставим пустым
-  item.taken_extra = item.booked_extra || ''; // переносим доп. информацию
+  item.taken_where = '';
+  item.taken_extra = item.booked_extra || '';
   item.condition = 'busy';
-  // Очищаем поля бронирования
   item.booked_by = '';
   item.booked_date = '';
   item.booked_extra = '';
@@ -466,6 +443,7 @@ export async function restoreRetiredItem(item, goList) {
   if (goList) goList();
   else window.dispatchEvent(new Event('app:refresh-route'));
 }
+
 // ========== УДАЛИТЬ ==========
 
 async function deleteInstrument(item, goList) {
