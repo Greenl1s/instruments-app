@@ -6,23 +6,20 @@ import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRe
 import { showCalendar } from './calendar.js';
 import { openModal, toast, closeModal } from './ui.js';
 
-// ============================================================
-// 1. Управление тёмной темой
-// ============================================================
 const themeToggle = document.getElementById('themeToggle');
 const savedTheme = localStorage.getItem('theme') || 'light';
 
 if (savedTheme === 'dark') {
   document.body.classList.add('dark-theme');
-  themeToggle.textContent = '☀️';
+  themeToggle.textContent = 'Светлая';
 } else {
-  themeToggle.textContent = '🌙';
+  themeToggle.textContent = 'Тёмная';
 }
 
 themeToggle.addEventListener('click', () => {
   document.body.classList.toggle('dark-theme');
   const isDark = document.body.classList.contains('dark-theme');
-  themeToggle.textContent = isDark ? '☀️' : '🌙';
+  themeToggle.textContent = isDark ? 'Светлая' : 'Тёмная';
   localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
 
