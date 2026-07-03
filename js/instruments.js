@@ -285,7 +285,6 @@ export function showInstrumentForm(item = null) {
     await saveWorkbook('Прибор сохранен');
     location.search = '?id=' + encodeURIComponent(data.id);
   };
-}
 
 // ========== ВЗЯТЬ ПРИБОР ==========
 
