@@ -346,13 +346,13 @@ label {
   align-items: center;
 }
 
-/* ===== МОДАЛЬНОЕ ОКНО (центрирование) ===== */
+/* ===== Модальное окно ===== */
 dialog {
   border: 0;
   border-radius: var(--radius);
   padding: 0;
   width: min(580px, calc(100% - 24px));
-  margin: auto; /* центрирование */
+  margin: auto;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.2);
   animation: modalIn 0.25s ease;
   max-height: 90vh;
@@ -534,7 +534,7 @@ dialog::backdrop {
   font-size: 12px;
 }
 
-/* ===== Улучшенный тулбар и фильтры ===== */
+/* ===== Тулбар и фильтры ===== */
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -634,7 +634,6 @@ dialog::backdrop {
   transform: translateY(-2px);
 }
 
-/* Специальные кнопки */
 .calendar-btn {
   background: #dbeafe !important;
   color: #1e40af !important;
