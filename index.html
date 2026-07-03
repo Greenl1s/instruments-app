@@ -9,15 +9,18 @@
 </head>
 <body>
   <main class="shell">
+    <!-- Auth -->
     <section id="authView" class="auth-view">
       <form id="loginForm" class="panel auth-panel">
         <h1>Учет приборов</h1>
+        <p>Войдите в систему</p>
         <label>Логин<input id="loginUsername" autocomplete="username" required></label>
         <label>Пароль<input id="loginPassword" type="password" autocomplete="current-password" required></label>
         <button class="primary" type="submit">Войти</button>
       </form>
     </section>
 
+    <!-- App -->
     <section id="appView" class="hidden">
       <header class="topbar">
         <div><h1>Учет приборов</h1><p id="syncStatus">Загрузка...</p></div>
@@ -29,18 +32,39 @@
         </div>
       </header>
 
+      <!-- Список -->
       <section id="listScreen">
         <div class="toolbar panel">
-          <input id="searchInput" class="search" placeholder="Поиск по названию, серийному номеру или модели">
-          <select id="verificationFilter"><option value="all">Поверка: все</option><option value="valid">Поверен</option><option value="expired">Не поверен</option><option value="none">Без поверки</option></select>
-          <select id="conditionFilter"><option value="all">Состояние: все</option><option value="free">Свободен</option><option value="busy">Занят</option><option value="booked">Забронирован</option></select>
-          <button id="calendarButton" class="secondary admin-only" type="button">Календарь</button>
-          <button id="retiredButton" class="secondary admin-only" type="button">Списанные</button>
-          <button id="addInstrumentButton" class="primary admin-only" type="button">Добавить</button>
+          <input id="searchInput" class="search" placeholder="🔍 Поиск по названию, серийному номеру или модели">
+          
+          <div class="filter-group">
+            <span class="filter-label">Поверка</span>
+            <select id="verificationFilter">
+              <option value="all">Все</option>
+              <option value="valid">Поверен</option>
+              <option value="expired">Не поверен</option>
+              <option value="none">Без поверки</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">Состояние</span>
+            <select id="conditionFilter">
+              <option value="all">Все</option>
+              <option value="free">Свободен</option>
+              <option value="busy">Занят</option>
+              <option value="booked">Забронирован</option>
+            </select>
+          </div>
+
+          <button id="calendarButton" class="secondary admin-only icon-btn calendar-btn" type="button">📅 Календарь</button>
+          <button id="retiredButton" class="secondary admin-only icon-btn retired-btn" type="button">🗑️ Списанные</button>
+          <button id="addInstrumentButton" class="primary admin-only icon-btn" type="button">➕ Добавить</button>
         </div>
         <div id="instrumentList" class="list"></div>
       </section>
 
+      <!-- Карточка -->
       <section id="cardScreen" class="hidden"></section>
     </section>
   </main>
