@@ -1,12 +1,14 @@
 /* ============================
    Импорт шрифта Inter
    ============================ */
-@import url('https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
 
 :root {
+  /* Светлая тема */
   --bg: #f1f5f9;
   --panel: #ffffff;
   --text: #0f172a;
+  --text-secondary: #475569;
   --muted: #64748b;
   --line: #e2e8f0;
   --primary: #2563eb;
@@ -17,7 +19,44 @@
   --warning: #f59e0b;
   --radius: 12px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-  --transition: 0.2s ease;
+  --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --transition: 0.25s ease;
+  --font-size-base: 16px;
+  --line-height-base: 1.6;
+  --input-bg: #fff;
+  --input-border: var(--line);
+  --badge-bg: #f1f5f9;
+  --badge-text: #475569;
+  --calendar-bg: #f8fafc;
+  --calendar-header-bg: #e9edf2;
+  --issued-bg: #fffbeb;
+  --issued-border: #fde68a;
+}
+
+/* Тёмная тема */
+body.dark-theme {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --text: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --muted: #94a3b8;
+  --line: #334155;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --danger: #f87171;
+  --danger-hover: #ef4444;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --input-bg: #1e293b;
+  --input-border: #334155;
+  --badge-bg: #334155;
+  --badge-text: #94a3b8;
+  --calendar-bg: #1e293b;
+  --calendar-header-bg: #334155;
+  --issued-bg: #1e293b;
+  --issued-border: #475569;
 }
 
 * {
@@ -31,7 +70,9 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  transition: background var(--transition), color var(--transition);
 }
 
 .shell {
@@ -50,11 +91,11 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  transition: box-shadow var(--transition), border-color var(--transition);
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
 }
 
 .panel:hover {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-hover);
 }
 
 /* ===== Авторизация ===== */
@@ -62,14 +103,14 @@ body {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: linear-gradient(145deg, #eef2f6 0%, #f8fafc 100%);
+  background: var(--bg);
 }
 
 .auth-panel {
   width: min(400px, 100%);
   padding: 32px 28px;
-  background: #ffffff;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 .auth-panel h1 {
@@ -95,6 +136,7 @@ body {
   margin-bottom: 24px;
   padding-bottom: 12px;
   border-bottom: 2px solid var(--line);
+  transition: border-color var(--transition);
 }
 
 .topbar h1 {
@@ -111,8 +153,8 @@ body {
 }
 
 .topbar-actions .badge {
-  background: #eef2f6;
-  color: var(--muted);
+  background: var(--badge-bg);
+  color: var(--badge-text);
   font-weight: 500;
   padding: 6px 12px;
 }
@@ -127,10 +169,16 @@ button {
   font-weight: 500;
   font-size: 14px;
   cursor: pointer;
-  transition: background var(--transition), transform 0.1s, box-shadow var(--transition);
+  transition: background var(--transition), transform 0.1s, box-shadow var(--transition), color var(--transition);
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  background: var(--badge-bg);
+  color: var(--text);
+}
+
+button svg {
+  flex-shrink: 0;
 }
 
 button:active {
@@ -155,12 +203,12 @@ button:disabled {
 }
 
 .secondary {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: var(--badge-bg);
+  color: var(--text);
 }
 
 .secondary:hover {
-  background: #e2e8f0;
+  background: var(--line);
   transform: translateY(-2px);
 }
 
@@ -179,13 +227,14 @@ button:disabled {
 input,
 select {
   min-height: 42px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--input-border);
   border-radius: 8px;
   padding: 8px 12px;
   font-family: inherit;
   font-size: 14px;
-  background: #fff;
-  transition: border-color var(--transition), box-shadow var(--transition);
+  background: var(--input-bg);
+  color: var(--text);
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition), color var(--transition);
   width: 100%;
 }
 
@@ -220,14 +269,14 @@ label {
   color: inherit;
   border-radius: var(--radius);
   border: 1px solid var(--line);
-  background: #ffffff;
-  transition: border-color var(--transition), box-shadow var(--transition), transform 0.15s;
+  background: var(--panel);
+  transition: border-color var(--transition), box-shadow var(--transition), transform 0.15s, background var(--transition);
   animation: fadeInUp 0.3s ease;
 }
 
 .row:hover {
   border-color: var(--primary);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-hover);
   transform: translateY(-3px);
 }
 
@@ -269,6 +318,8 @@ label {
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
+  background: var(--badge-bg);
+  color: var(--badge-text);
 }
 
 .muted {
@@ -288,13 +339,19 @@ label {
   color: #991b1b;
 }
 
+body.dark-theme .muted { background: #334155; color: #94a3b8; }
+body.dark-theme .ok { background: #065f46; color: #86efac; }
+body.dark-theme .warn { background: #78350f; color: #fcd34d; }
+body.dark-theme .bad { background: #7f1d1d; color: #fca5a5; }
+
 /* ===== Карточка прибора ===== */
 .card {
   padding: 24px;
-  background: #ffffff;
+  background: var(--panel);
   border-radius: var(--radius);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
 }
 
 .card h1 {
@@ -333,9 +390,9 @@ label {
 .issued {
   margin-top: 20px;
   padding: 16px;
-  background: #fffbeb;
+  background: var(--issued-bg);
   border-radius: var(--radius);
-  border: 1px solid #fde68a;
+  border: 1px solid var(--issued-border);
 }
 
 .actions {
@@ -357,6 +414,8 @@ dialog {
   animation: modalIn 0.25s ease;
   max-height: 90vh;
   overflow-y: auto;
+  background: var(--panel);
+  color: var(--text);
 }
 
 dialog::backdrop {
@@ -435,6 +494,11 @@ dialog::backdrop {
   animation: toastIn 0.3s ease;
 }
 
+body.dark-theme .toast {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
 @keyframes toastIn {
   from {
     opacity: 0;
@@ -459,9 +523,10 @@ dialog::backdrop {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  background: #f8fafc;
+  background: var(--calendar-bg);
+  color: var(--text);
   font-weight: 500;
-  transition: background 0.2s, transform 0.1s;
+  transition: background 0.2s, transform 0.1s, color 0.2s;
 }
 
 .day:hover {
@@ -470,7 +535,7 @@ dialog::backdrop {
 
 .day.header {
   font-weight: 700;
-  background: #e9edf2;
+  background: var(--calendar-header-bg);
   color: var(--text);
 }
 
@@ -517,6 +582,13 @@ dialog::backdrop {
   font-weight: 700;
 }
 
+body.dark-theme .day.event { background: #065f46; color: #86efac; border-color: #4ade80; }
+body.dark-theme .day.red { background: #7f1d1d; color: #fca5a5; border-color: #f87171; }
+body.dark-theme .day.green { background: #065f46; color: #86efac; border-color: #4ade80; }
+body.dark-theme .day.blue { background: #1e3a8a; color: #93c5fd; border-color: #60a5fa; }
+body.dark-theme .day.orange { background: #78350f; color: #fcd34d; border-color: #fbbf24; }
+body.dark-theme .day.purple { background: #4c1d95; color: #c4b5fd; border-color: #a78bfa; }
+
 .calendar-legend {
   display: flex;
   gap: 16px;
@@ -541,11 +613,12 @@ dialog::backdrop {
   gap: 14px;
   align-items: center;
   padding: 16px 20px;
-  background: #ffffff;
+  background: var(--panel);
   border-radius: var(--radius);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   margin-bottom: 20px;
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
 }
 
 .search {
@@ -557,11 +630,11 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #f8fafc;
+  background: var(--input-bg);
   padding: 4px 12px 4px 16px;
   border-radius: 40px;
   border: 1px solid var(--line);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, background var(--transition);
 }
 
 .filter-group:focus-within {
@@ -597,7 +670,7 @@ dialog::backdrop {
 }
 
 .filter-group select option {
-  background: #fff;
+  background: var(--input-bg);
   color: var(--text);
 }
 
@@ -625,12 +698,12 @@ dialog::backdrop {
 }
 
 .icon-btn.secondary {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: var(--badge-bg);
+  color: var(--text);
 }
 
 .icon-btn.secondary:hover {
-  background: #e2e8f0;
+  background: var(--line);
   transform: translateY(-2px);
 }
 
@@ -650,6 +723,72 @@ dialog::backdrop {
 .retired-btn:hover {
   background: #fecaca !important;
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+}
+
+body.dark-theme .calendar-btn {
+  background: #1e3a8a !important;
+  color: #93c5fd !important;
+}
+body.dark-theme .calendar-btn:hover {
+  background: #1e40af !important;
+}
+
+body.dark-theme .retired-btn {
+  background: #7f1d1d !important;
+  color: #fca5a5 !important;
+}
+body.dark-theme .retired-btn:hover {
+  background: #991b1b !important;
+}
+
+/* ===== Переключатель темы ===== */
+#themeToggle {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 40px;
+  padding: 6px 12px;
+  min-height: 34px;
+  font-size: 20px;
+  line-height: 1;
+  transition: background var(--transition), border-color var(--transition);
+}
+#themeToggle:hover {
+  background: var(--badge-bg);
+}
+
+/* ===== Спиннер загрузки ===== */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+button .spinner {
+  margin-right: 6px;
+}
+
+/* ===== Анимированные переходы между экранами ===== */
+#listScreen, #cardScreen {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#listScreen.hidden, #cardScreen.hidden {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+#listScreen:not(.hidden), #cardScreen:not(.hidden) {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ===== Адаптивность ===== */
