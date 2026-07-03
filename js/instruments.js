@@ -97,19 +97,26 @@ export function renderList(openCard) {
 // ========== Карточка прибора ==========
 
 export function renderCard(id, goList) {
+  // Ищем прибор в основном списке
   let item = state.instruments.find((i) => String(i.id) === String(id));
   let isRetired = false;
+  // Если не нашли – ищем в списанных
   if (!item) {
     item = state.retired.find((i) => String(i.id) === String(id));
     isRetired = true;
   }
+
+  // Переключаем экраны
   document.getElementById('listScreen').classList.add('hidden');
   document.getElementById('cardScreen').classList.remove('hidden');
+
   if (!item) {
-    document.getElementById('cardScreen').innerHTML = `<div class="panel card">Прибор не найден<div class="actions"><button class="secondary" data-back>К списку</button></div></div>`;
+    document.getElementById('cardScreen').innerHTML =
+      `<div class="panel card">Прибор не найден<div class="actions"><button class="secondary" data-back>К списку</button></div></div>`;
     document.getElementById('cardScreen').querySelector('[data-back]').onclick = goList;
     return;
   }
+
   const isAdmin = state.currentUser.role === 'admin';
   const isTaken = Boolean(item.taken_by);
   const isOwner = item.taken_by === state.currentUser.username;
@@ -118,6 +125,16 @@ export function renderCard(id, goList) {
   const isRetiredFlag = isRetired || item.condition === 'retired';
   const isFree = !isTaken && !isBooked && !isRetiredFlag;
 
+  // ---------- БЛОК ФОТО ----------
+  let photoHtml = '';
+  if (item.photo_url) {
+    photoHtml = `<div style="text-align: center; margin-bottom: 16px;">
+      <img src="${escapeAttr(item.photo_url)}" alt="Фото прибора"
+           style="max-width: 100%; max-height: 300px; border-radius: var(--radius); object-fit: contain; border: 1px solid var(--line);">
+    </div>`;
+  }
+
+  // ---------- КНОПКИ ----------
   let mainButtons = '';
   let adminButtons = '';
 
@@ -131,20 +148,16 @@ export function renderCard(id, goList) {
   } else {
     // Активный прибор
     if (isFree) {
-      // Свободен – показываем "Взять" и "Забронировать"
       mainButtons += '<button class="primary" data-issue>Взять</button>';
       mainButtons += '<button class="secondary" data-book>Забронировать</button>';
     } else if (isBooked) {
-      // Забронирован – показываем "Отменить бронирование" (только для того, кто забронировал) и "Подтвердить бронирование" (для админа или того же пользователя)
       if (isBookedByMe || isAdmin) {
         mainButtons += '<button class="danger" data-cancel-booking>Отменить бронирование</button>';
         mainButtons += '<button class="primary" data-confirm-booking>Подтвердить бронирование</button>';
       } else {
-        // Забронирован другим – только просмотр
         mainButtons += '<span class="badge warn">Забронирован</span>';
       }
     } else if (isTaken) {
-      // Взят
       if (isOwner || isAdmin) {
         mainButtons += '<button class="primary" data-return>Вернуть</button>';
         if (isOwner) mainButtons += '<button class="secondary" data-transfer>Передать</button>';
@@ -152,7 +165,8 @@ export function renderCard(id, goList) {
         mainButtons += '<span class="badge warn">Занят</span>';
       }
     }
-    // Общие кнопки
+
+    // Общие кнопки для активных приборов
     mainButtons += '<button class="secondary" data-qr>QR</button>';
     mainButtons += '<button class="secondary" data-copy>Копировать</button>';
     if (isAdmin) {
@@ -176,19 +190,22 @@ export function renderCard(id, goList) {
     actionsHtml += `<div class="actions" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; justify-content:flex-end;">${backButton}</div>`;
   }
 
+  // ---------- ДОП. ПОЛЯ (занят или забронирован) ----------
   let extraFields = '';
-if (isBooked) {
-  extraFields = `<div class="issued" style="background:#fee2e2;border-color:#fda29b;">
-    ${field('Забронировал', item.booked_by)}
-    ${field('Дата бронирования', item.booked_date)}
-    ${field('Доп. информация', item.booked_extra || '—')}
-  </div>`;
-} else if (isTaken) {
-  extraFields = `<div class="issued">${field('Кто взял', item.taken_by)}${field('Место', item.taken_where)}${field('Доп.данные', item.taken_extra)}${field('Дата выдачи', item.taken_date)}</div>`;
-} 
-  
+  if (isBooked) {
+    extraFields = `<div class="issued" style="background:#fee2e2;border-color:#fda29b;">
+      ${field('Забронировал', item.booked_by)}
+      ${field('Дата бронирования', item.booked_date)}
+      ${field('Доп. информация', item.booked_extra || '—')}
+    </div>`;
+  } else if (isTaken) {
+    extraFields = `<div class="issued">${field('Кто взял', item.taken_by)}${field('Место', item.taken_where)}${field('Доп.данные', item.taken_extra)}${field('Дата выдачи', item.taken_date)}</div>`;
+  }
+
+  // ---------- СБОРКА HTML ----------
   document.getElementById('cardScreen').innerHTML =
     `<article class="panel card">
+      ${photoHtml}
       <h1>${escapeHtml(item.name || 'Без названия')}</h1>
       <div class="badges">
         <span class="badge ${verificationBadge(item.valid_until)}">${verificationText(item.valid_until)}</span>
@@ -202,11 +219,13 @@ if (isBooked) {
         ${field('Дата поверки/калибровки', item.verification_date)}
         ${field('Действительно до', item.valid_until)}
         ${field('Документ', item.document_url ? `<a href="${escapeAttr(item.document_url)}" target="_blank" rel="noopener">Открыть</a>` : '—', true)}
+        ${field('Фото', item.photo_url ? `<a href="${escapeAttr(item.photo_url)}" target="_blank" rel="noopener">Открыть фото</a>` : '—', true)}
       </div>
       ${extraFields}
       ${actionsHtml}
     </article>`;
 
+  // ---------- ПРИВЯЗКА СОБЫТИЙ ----------
   bindCardActions(item, goList, isRetiredFlag);
 }
 
