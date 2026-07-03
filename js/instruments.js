@@ -265,14 +265,11 @@ export function showInstrumentForm(item = null) {
       ${input('verification_date', 'Дата поверки/калибровки', v.verification_date, 'date')}
       ${input('valid_until', 'Действительно до', v.valid_until, 'date')}
       ${input('document_url', 'Ссылка на документ', v.document_url, 'url')}
-      ${input('photo_url', 'Ссылка на фото прибора', v.photo_url, 'url')}  <!-- новое поле -->
+      ${input('photo_url', 'Ссылка на фото прибора', v.photo_url, 'url')}
       ${select('condition', 'Состояние', v.condition, [['free', 'Свободен'], ['busy', 'Занят'], ['booked', 'Забронирован'], ['retired', 'Списан']])}
       ${isEdit ? input('taken_extra', 'Доп. данные при выдаче', v.taken_extra || '', 'text') : ''}
       <div class="modal-actions"><button class="primary" type="submit">Сохранить</button></div>
     </form>`);
-
-  // ... остальной код без изменений
-}
 
   document.getElementById('instrumentForm').onsubmit = async (event) => {
     event.preventDefault();
@@ -285,6 +282,7 @@ export function showInstrumentForm(item = null) {
     await saveWorkbook('Прибор сохранен');
     location.search = '?id=' + encodeURIComponent(data.id);
   };
+}
 
 // ========== ВЗЯТЬ ПРИБОР ==========
 
