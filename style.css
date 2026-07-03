@@ -1,5 +1,5 @@
 /* ============================
-   Импорт шрифта Inter (современный)
+   Импорт шрифта Inter
    ============================ */
 @import url('https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap');
 
@@ -151,6 +151,7 @@ button:disabled {
 .primary:hover {
   background: var(--primary-hover);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  transform: translateY(-2px);
 }
 
 .secondary {
@@ -160,6 +161,7 @@ button:disabled {
 
 .secondary:hover {
   background: #e2e8f0;
+  transform: translateY(-2px);
 }
 
 .danger {
@@ -170,6 +172,7 @@ button:disabled {
 
 .danger:hover {
   background: var(--danger-hover);
+  transform: translateY(-2px);
 }
 
 /* ===== Инпуты и селекты ===== */
@@ -218,13 +221,25 @@ label {
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: #ffffff;
-  transition: border-color var(--transition), box-shadow var(--transition), transform 0.1s;
+  transition: border-color var(--transition), box-shadow var(--transition), transform 0.15s;
+  animation: fadeInUp 0.3s ease;
 }
 
 .row:hover {
   border-color: var(--primary);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  transform: translateY(-3px);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .row-title {
@@ -256,7 +271,6 @@ label {
   font-weight: 600;
 }
 
-/* Цветные бейджи */
 .muted {
   background: #f1f5f9;
   color: #475569;
@@ -332,29 +346,42 @@ label {
   align-items: center;
 }
 
-/* ===== Модалка ===== */
+/* ===== МОДАЛЬНОЕ ОКНО (центрирование) ===== */
 dialog {
   border: 0;
   border-radius: var(--radius);
   padding: 0;
   width: min(580px, calc(100% - 24px));
+  margin: auto; /* центрирование */
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.2);
-  animation: modalIn 0.2s ease;
+  animation: modalIn 0.25s ease;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 dialog::backdrop {
   background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px);
+  animation: backdropIn 0.25s ease;
 }
 
 @keyframes modalIn {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(10px);
+    transform: scale(0.95) translateY(16px);
   }
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -368,6 +395,8 @@ dialog::backdrop {
   gap: 12px;
   align-items: center;
   margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
 }
 
 .modal-head h1 {
@@ -381,6 +410,8 @@ dialog::backdrop {
   gap: 10px;
   justify-content: flex-end;
   margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
 }
 
 .form-grid {
@@ -430,7 +461,11 @@ dialog::backdrop {
   place-items: center;
   background: #f8fafc;
   font-weight: 500;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.day:hover {
+  transform: scale(1.05);
 }
 
 .day.header {
@@ -447,7 +482,6 @@ dialog::backdrop {
   font-weight: 700;
 }
 
-/* Цвета для календаря */
 .day.red {
   background: #fee2e2;
   color: #b91c1c;
@@ -500,31 +534,6 @@ dialog::backdrop {
   font-size: 12px;
 }
 
-/* ===== Адаптивность ===== */
-@media (max-width: 720px) {
-  .topbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .topbar-actions {
-    justify-content: stretch;
-  }
-  .topbar-actions > * {
-    flex: 1 1 auto;
-  }
-  .row {
-    grid-template-columns: 1fr;
-  }
-  .badges {
-    justify-content: flex-start;
-  }
-  .card-grid {
-    grid-template-columns: 1fr;
-  }
-  .shell {
-    padding: 16px 12px;
-  }
-}
 /* ===== Улучшенный тулбар и фильтры ===== */
 .toolbar {
   display: flex;
@@ -644,8 +653,30 @@ dialog::backdrop {
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
 }
 
-/* Адаптация для мобильных */
+/* ===== Адаптивность ===== */
 @media (max-width: 720px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .topbar-actions {
+    justify-content: stretch;
+  }
+  .topbar-actions > * {
+    flex: 1 1 auto;
+  }
+  .row {
+    grid-template-columns: 1fr;
+  }
+  .badges {
+    justify-content: flex-start;
+  }
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+  .shell {
+    padding: 16px 12px;
+  }
   .toolbar {
     flex-direction: column;
     align-items: stretch;
@@ -661,5 +692,9 @@ dialog::backdrop {
   }
   .icon-btn {
     justify-content: center;
+  }
+  dialog {
+    margin: 12px auto;
+    max-height: 95vh;
   }
 }
