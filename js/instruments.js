@@ -235,7 +235,7 @@ function bindCardActions(item, goList, isRetired) {
 
 export function showInstrumentForm(item = null) {
   const isEdit = Boolean(item);
-  const v = item || { id: nextId(), condition: 'free', type: 'Поверка', taken_extra: '' };
+  const v = item || { id: nextId(), condition: 'free', type: 'Поверка', taken_extra: '', photo_url: '' };
   openModal(isEdit ? 'Редактировать прибор' : 'Добавить прибор',
     `<form id="instrumentForm" class="form-grid">
       ${input('id', 'ID', v.id, 'number', true)}
@@ -246,10 +246,14 @@ export function showInstrumentForm(item = null) {
       ${input('verification_date', 'Дата поверки/калибровки', v.verification_date, 'date')}
       ${input('valid_until', 'Действительно до', v.valid_until, 'date')}
       ${input('document_url', 'Ссылка на документ', v.document_url, 'url')}
+      ${input('photo_url', 'Ссылка на фото прибора', v.photo_url, 'url')}  <!-- новое поле -->
       ${select('condition', 'Состояние', v.condition, [['free', 'Свободен'], ['busy', 'Занят'], ['booked', 'Забронирован'], ['retired', 'Списан']])}
       ${isEdit ? input('taken_extra', 'Доп. данные при выдаче', v.taken_extra || '', 'text') : ''}
       <div class="modal-actions"><button class="primary" type="submit">Сохранить</button></div>
     </form>`);
+
+  // ... остальной код без изменений
+}
 
   document.getElementById('instrumentForm').onsubmit = async (event) => {
     event.preventDefault();
