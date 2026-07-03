@@ -30,21 +30,10 @@
         </div>
         <div class="topbar-actions">
           <span id="currentUserBadge" class="badge muted"></span>
-          <button id="themeToggle" class="secondary icon-btn" type="button" aria-label="Переключить тему">
-            <!-- иконка темы будет вставлена через CSS или JS -->
-          </button>
-          <button id="usersButton" class="secondary admin-only" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            Пользователи
-          </button>
-          <button id="profileButton" class="secondary" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            Профиль
-          </button>
-          <button id="logoutButton" class="danger" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            Выйти
-          </button>
+          <button id="themeToggle" class="secondary" type="button">Тема</button>
+          <button id="usersButton" class="secondary admin-only" type="button">Пользователи</button>
+          <button id="profileButton" class="secondary" type="button">Профиль</button>
+          <button id="logoutButton" class="danger" type="button">Выйти</button>
         </div>
       </header>
 
@@ -73,18 +62,9 @@
             </select>
           </div>
 
-          <button id="calendarButton" class="secondary admin-only icon-btn calendar-btn" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Календарь
-          </button>
-          <button id="retiredButton" class="secondary admin-only icon-btn retired-btn" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-            Списанные
-          </button>
-          <button id="addInstrumentButton" class="primary admin-only icon-btn" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Добавить
-          </button>
+          <button id="calendarButton" class="secondary admin-only icon-btn calendar-btn" type="button">Календарь</button>
+          <button id="retiredButton" class="secondary admin-only icon-btn retired-btn" type="button">Списанные</button>
+          <button id="addInstrumentButton" class="primary admin-only icon-btn" type="button">Добавить</button>
         </div>
 
         <div id="instrumentList" class="list"></div>
@@ -100,6 +80,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <script type="module" src="./js/app.js?v=4"></script>
+  <script type="module" src="./js/app.js?v=5"></script>
 </body>
 </html>
