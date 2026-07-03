@@ -12,17 +12,20 @@ import { openModal, toast, closeModal } from './ui.js';
 const themeToggle = document.getElementById('themeToggle');
 const savedTheme = localStorage.getItem('theme') || 'light';
 
+// Устанавливаем начальную тему
 if (savedTheme === 'dark') {
   document.body.classList.add('dark-theme');
-  themeToggle.textContent = 'Светлая';
-} else {
-  themeToggle.textContent = 'Тёмная';
 }
 
+// Обработчик клика – переключаем тему и добавляем анимацию
 themeToggle.addEventListener('click', () => {
+  // Анимация вращения
+  themeToggle.classList.add('switching');
+  setTimeout(() => themeToggle.classList.remove('switching'), 600);
+
+  // Переключаем класс на body
   document.body.classList.toggle('dark-theme');
   const isDark = document.body.classList.contains('dark-theme');
-  themeToggle.textContent = isDark ? 'Светлая' : 'Тёмная';
   localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
 
