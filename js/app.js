@@ -10,22 +10,25 @@ import { openModal, toast, closeModal } from './ui.js';
 // Переключение темы (простой и надёжный вариант)
 // ============================================================
 const themeToggle = document.getElementById('themeToggle');
-const savedTheme = localStorage.getItem('theme') || 'light';
+if (themeToggle) {
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  
+  // Устанавливаем начальную тему и текст кнопки
+  if (savedTheme === 'dark') {
+    document.body.classList.add('dark-theme');
+    themeToggle.textContent = 'Светлая';
+  } else {
+    themeToggle.textContent = 'Тёмная';
+  }
 
-// Устанавливаем начальную тему
-if (savedTheme === 'dark') {
-  document.body.classList.add('dark-theme');
-  themeToggle.textContent = 'Светлая';
-} else {
-  themeToggle.textContent = 'Тёмная';
+  // Обработчик клика
+  themeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('dark-theme');
+    const isDark = document.body.classList.contains('dark-theme');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    themeToggle.textContent = isDark ? 'Светлая' : 'Тёмная';
+  });
 }
-
-themeToggle.addEventListener('click', () => {
-  document.body.classList.toggle('dark-theme');
-  const isDark = document.body.classList.contains('dark-theme');
-  themeToggle.textContent = isDark ? 'Светлая' : 'Тёмная';
-  localStorage.setItem('theme', isDark ? 'dark' : 'light');
-});
 
 // ============================================================
 // Спиннер для кнопок (внутренняя функция, не экспортируется)
