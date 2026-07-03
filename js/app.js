@@ -7,27 +7,26 @@ import { showCalendar } from './calendar.js';
 import { openModal, toast, closeModal } from './ui.js';
 
 // ============================================================
-// Управление тёмной темой
+// Кнопка переключения темы (фиксированная, с псевдо-элементами)
 // ============================================================
 const themeToggle = document.getElementById('themeToggle');
-const savedTheme = localStorage.getItem('theme') || 'light';
 
-// Устанавливаем начальную тему
-if (savedTheme === 'dark') {
-  document.body.classList.add('dark-theme');
+if (themeToggle) {
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  if (savedTheme === 'dark') {
+    document.body.classList.add('dark-theme');
+  }
+
+  themeToggle.addEventListener('click', () => {
+    themeToggle.classList.add('switching');
+    setTimeout(() => themeToggle.classList.remove('switching'), 600);
+    document.body.classList.toggle('dark-theme');
+    const isDark = document.body.classList.contains('dark-theme');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  });
+} else {
+  console.warn('Кнопка переключения темы не найдена в DOM');
 }
-
-// Обработчик клика – переключаем тему и добавляем анимацию
-themeToggle.addEventListener('click', () => {
-  // Анимация вращения
-  themeToggle.classList.add('switching');
-  setTimeout(() => themeToggle.classList.remove('switching'), 600);
-
-  // Переключаем класс на body
-  document.body.classList.toggle('dark-theme');
-  const isDark = document.body.classList.contains('dark-theme');
-  localStorage.setItem('theme', isDark ? 'dark' : 'light');
-});
 
 // ============================================================
 // Спиннер для кнопок (внутренняя функция, не экспортируется)
