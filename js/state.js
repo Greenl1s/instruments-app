@@ -8,5 +8,6 @@ export const state = {
   search: '',
   verification: 'all',
   condition: 'all',
-  userFilter: 'all'
+  userFilter: 'all',
+  massMode: false
 };
