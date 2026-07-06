@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { $ } from './utils.js';
-import { loadWorkbook } from './excel.js';
+import { loadWorkbook, saveWorkbook } from './excel.js'; // ← добавлен saveWorkbook
 import { ensureDefaultAdmin, login, logout, readSession, showUserForm, showUsersManager } from './auth.js';
 import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRetiredItem, retireInstrument } from './instruments.js';
 import { showCalendar } from './calendar.js';
@@ -102,7 +102,8 @@ function bindEvents() {
     for (const item of selected) {
       await retireInstrument(item, () => {});
     }
-    await saveWorkbook('Приборы списаны');
+    // retireInstrument уже сохраняет, но если требуется дополнительное сохранение – можно оставить
+    // await saveWorkbook('Приборы списаны'); // (уже вызывается внутри retireInstrument)
     renderList(openCard);
     toast('Приборы списаны');
   };
