@@ -2,18 +2,16 @@ import { state } from './state.js';
 import { $ } from './utils.js';
 import { loadWorkbook } from './excel.js';
 import { ensureDefaultAdmin, login, logout, readSession, showUserForm, showUsersManager } from './auth.js';
-import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRetiredItem } from './instruments.js';
+import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRetiredItem, retireInstrument } from './instruments.js';
 import { showCalendar } from './calendar.js';
 import { openModal, toast, closeModal } from './ui.js';
 
 // ============================================================
-// Переключение темы (простой и надёжный вариант)
+// Переключение темы
 // ============================================================
 const themeToggle = document.getElementById('themeToggle');
 if (themeToggle) {
   const savedTheme = localStorage.getItem('theme') || 'light';
-  
-  // Устанавливаем начальную тему и текст кнопки
   if (savedTheme === 'dark') {
     document.body.classList.add('dark-theme');
     themeToggle.textContent = 'Светлая';
@@ -21,29 +19,12 @@ if (themeToggle) {
     themeToggle.textContent = 'Тёмная';
   }
 
-  // Обработчик клика
   themeToggle.addEventListener('click', () => {
     document.body.classList.toggle('dark-theme');
     const isDark = document.body.classList.contains('dark-theme');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
     themeToggle.textContent = isDark ? 'Светлая' : 'Тёмная';
   });
-}
-
-// ============================================================
-// Спиннер для кнопок (внутренняя функция, не экспортируется)
-// ============================================================
-function showSpinner(button) {
-  if (!button || button.disabled) return null;
-  button.disabled = true;
-  const originalHtml = button.innerHTML;
-  button.dataset.originalHtml = originalHtml;
-  button.innerHTML = '<span class="spinner"></span> Загрузка...';
-  return function restore() {
-    button.disabled = false;
-    button.innerHTML = button.dataset.originalHtml || originalHtml;
-    delete button.dataset.originalHtml;
-  };
 }
 
 // ============================================================
@@ -57,6 +38,7 @@ async function init() {
   try {
     await loadWorkbook();
     await ensureDefaultAdmin();
+    populateUserFilter();
     state.currentUser ? showApp() : showAuth();
   } catch (error) {
     toast(error.message, true);
@@ -105,32 +87,88 @@ function bindEvents() {
     renderList(openCard);
   };
 
+  // Фильтр по пользователю
+  const userFilter = document.getElementById('userFilter');
+  userFilter.onchange = (e) => {
+    state.userFilter = e.target.value;
+    renderList(openCard);
+  };
+
+  // Массовые операции
+  document.getElementById('massRetireBtn').onclick = async () => {
+    const selected = getSelectedInstruments();
+    if (!selected.length) return toast('Выберите приборы', true);
+    if (!confirm(`Списать ${selected.length} прибор(ов)?`)) return;
+    for (const item of selected) {
+      await retireInstrument(item, () => {});
+    }
+    await saveWorkbook('Приборы списаны');
+    renderList(openCard);
+    toast('Приборы списаны');
+  };
+
+  document.getElementById('massDeleteBtn').onclick = async () => {
+    const selected = getSelectedInstruments();
+    if (!selected.length) return toast('Выберите приборы', true);
+    if (!confirm(`Удалить ${selected.length} прибор(ов) безвозвратно?`)) return;
+    for (const item of selected) {
+      state.instruments = state.instruments.filter(i => i !== item);
+    }
+    await saveWorkbook('Приборы удалены');
+    renderList(openCard);
+    toast('Приборы удалены');
+  };
+
   window.addEventListener('popstate', renderRoute);
   window.addEventListener('app:refresh-route', renderRoute);
 }
 
 // ============================================================
-// Вход (со спиннером)
+// Заполнение фильтра пользователей
+// ============================================================
+function populateUserFilter() {
+  const userFilter = document.getElementById('userFilter');
+  const currentValue = userFilter.value;
+  userFilter.innerHTML = '<option value="all">Все</option>';
+  state.users.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.username;
+    opt.textContent = u.username;
+    userFilter.appendChild(opt);
+  });
+  userFilter.value = currentValue || 'all';
+}
+
+// ============================================================
+// Получение выбранных приборов (для массовых операций)
+// ============================================================
+function getSelectedInstruments() {
+  const checkboxes = document.querySelectorAll('.instrument-checkbox:checked');
+  const ids = Array.from(checkboxes).map(cb => cb.value);
+  return state.instruments.filter(i => ids.includes(String(i.id)));
+}
+
+// ============================================================
+// Вход
 // ============================================================
 async function onLogin(event) {
   event.preventDefault();
   const btn = event.target.querySelector('button[type="submit"]');
-  const restore = showSpinner(btn);
-  if (!restore) return;
-
+  btn.disabled = true;
+  btn.textContent = 'Загрузка...';
   try {
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
     if (!login(username, password)) {
       toast('Неверный логин или пароль', true);
-      restore();
       return;
     }
     showApp();
-    restore();
   } catch (err) {
     toast('Ошибка входа', true);
-    restore();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Войти';
   }
 }
 
@@ -147,9 +185,12 @@ function showApp() {
   document.getElementById('appView').classList.remove('hidden');
   document.getElementById('currentUserBadge').textContent =
     state.currentUser.role === 'admin' ? 'Администратор' : state.currentUser.username;
+  const isAdmin = state.currentUser.role === 'admin';
   document.querySelectorAll('.admin-only').forEach((node) =>
-    node.classList.toggle('hidden', state.currentUser.role !== 'admin')
+    node.classList.toggle('hidden', !isAdmin)
   );
+  document.getElementById('massRetireBtn').style.display = isAdmin ? 'inline-flex' : 'none';
+  document.getElementById('massDeleteBtn').style.display = isAdmin ? 'inline-flex' : 'none';
   renderRoute();
 }
 
