@@ -37,38 +37,43 @@
       </header>
 
       <section id="listScreen">
-       <div class="toolbar panel">
-  <input id="searchInput" class="search" placeholder="Поиск по названию, серийному номеру или модели">
-  <div class="filter-group">
-    <span class="filter-label">Поверка</span>
-    <select id="verificationFilter">
-      <option value="all">Все</option>
-      <option value="valid">Поверен</option>
-      <option value="expired">Не поверен</option>
-      <option value="none">Без поверки</option>
-    </select>
-  </div>
-  <div class="filter-group">
-    <span class="filter-label">Состояние</span>
-    <select id="conditionFilter">
-      <option value="all">Все</option>
-      <option value="free">Свободен</option>
-      <option value="busy">Занят</option>
-      <option value="booked">Забронирован</option>
-    </select>
-  </div>
-  <div class="filter-group">
-    <span class="filter-label">Пользователь</span>
-    <select id="userFilter">
-      <option value="all">Все</option>
-    </select>
-  </div>
-  <button id="calendarButton" class="secondary admin-only" type="button">Календарь</button>
-  <button id="retiredButton" class="secondary admin-only" type="button">Списанные</button>
-  <button id="addInstrumentButton" class="primary admin-only" type="button">Добавить</button>
-  <button id="massRetireBtn" class="danger admin-only" type="button" style="display:none;">Списать выбранные</button>
-  <button id="massDeleteBtn" class="danger admin-only" type="button" style="display:none;">Удалить выбранные</button>
-</div>
+        <div class="toolbar panel">
+          <input id="searchInput" class="search" placeholder="Поиск по названию, серийному номеру или модели">
+
+          <div class="filter-group">
+            <span class="filter-label">Поверка</span>
+            <select id="verificationFilter">
+              <option value="all">Все</option>
+              <option value="valid">Поверен</option>
+              <option value="expired">Не поверен</option>
+              <option value="none">Без поверки</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">Состояние</span>
+            <select id="conditionFilter">
+              <option value="all">Все</option>
+              <option value="free">Свободен</option>
+              <option value="busy">Занят</option>
+              <option value="booked">Забронирован</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">Пользователь</span>
+            <select id="userFilter">
+              <option value="all">Все</option>
+            </select>
+          </div>
+
+          <button id="calendarButton" class="secondary admin-only" type="button">Календарь</button>
+          <button id="retiredButton" class="secondary admin-only" type="button">Списанные</button>
+          <button id="addInstrumentButton" class="primary admin-only" type="button">Добавить</button>
+          <button id="massRetireBtn" class="danger admin-only" type="button" style="display:none;">Списать выбранные</button>
+          <button id="massDeleteBtn" class="danger admin-only" type="button" style="display:none;">Удалить выбранные</button>
+        </div>
+
         <div id="instrumentList" class="list"></div>
       </section>
 
@@ -81,6 +86,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <script type="module" src="./js/app.js?v=7"></script>
+  <script type="module" src="./js/app.js?v=8"></script>
 </body>
 </html>
