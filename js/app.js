@@ -1,14 +1,12 @@
 import { state } from './state.js';
 import { $ } from './utils.js';
-import { loadWorkbook, saveWorkbook } from './excel.js'; // ← добавлен saveWorkbook
+import { loadWorkbook, saveWorkbook } from './excel.js';
 import { ensureDefaultAdmin, login, logout, readSession, showUserForm, showUsersManager } from './auth.js';
 import { renderCard, renderList, showInstrumentForm, renderRetiredRow, restoreRetiredItem, retireInstrument } from './instruments.js';
 import { showCalendar } from './calendar.js';
 import { openModal, toast, closeModal } from './ui.js';
 
-// ============================================================
-// Переключение темы
-// ============================================================
+// ===== Переключение темы =====
 const themeToggle = document.getElementById('themeToggle');
 if (themeToggle) {
   const savedTheme = localStorage.getItem('theme') || 'light';
@@ -18,7 +16,6 @@ if (themeToggle) {
   } else {
     themeToggle.textContent = 'Тёмная';
   }
-
   themeToggle.addEventListener('click', () => {
     document.body.classList.toggle('dark-theme');
     const isDark = document.body.classList.contains('dark-theme');
@@ -27,9 +24,7 @@ if (themeToggle) {
   });
 }
 
-// ============================================================
-// Инициализация
-// ============================================================
+// ===== Инициализация =====
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -46,9 +41,6 @@ async function init() {
   }
 }
 
-// ============================================================
-// Привязка событий
-// ============================================================
 function bindEvents() {
   document.getElementById('loginForm').addEventListener('submit', onLogin);
 
@@ -94,6 +86,16 @@ function bindEvents() {
     renderList(openCard);
   };
 
+  // ===== Массовый режим (кнопка "Выбрать") =====
+  document.getElementById('massToggleBtn').onclick = () => {
+    state.massMode = !state.massMode;
+    const isMass = state.massMode;
+    document.getElementById('massRetireBtn').style.display = isMass ? 'inline-flex' : 'none';
+    document.getElementById('massDeleteBtn').style.display = isMass ? 'inline-flex' : 'none';
+    document.getElementById('massToggleBtn').textContent = isMass ? 'Отменить выбор' : 'Выбрать';
+    renderList(openCard);
+  };
+
   // Массовые операции
   document.getElementById('massRetireBtn').onclick = async () => {
     const selected = getSelectedInstruments();
@@ -102,8 +104,11 @@ function bindEvents() {
     for (const item of selected) {
       await retireInstrument(item, () => {});
     }
-    // retireInstrument уже сохраняет, но если требуется дополнительное сохранение – можно оставить
-    // await saveWorkbook('Приборы списаны'); // (уже вызывается внутри retireInstrument)
+    // Выходим из режима массового выбора
+    state.massMode = false;
+    document.getElementById('massRetireBtn').style.display = 'none';
+    document.getElementById('massDeleteBtn').style.display = 'none';
+    document.getElementById('massToggleBtn').textContent = 'Выбрать';
     renderList(openCard);
     toast('Приборы списаны');
   };
@@ -116,6 +121,10 @@ function bindEvents() {
       state.instruments = state.instruments.filter(i => i !== item);
     }
     await saveWorkbook('Приборы удалены');
+    state.massMode = false;
+    document.getElementById('massRetireBtn').style.display = 'none';
+    document.getElementById('massDeleteBtn').style.display = 'none';
+    document.getElementById('massToggleBtn').textContent = 'Выбрать';
     renderList(openCard);
     toast('Приборы удалены');
   };
@@ -124,9 +133,6 @@ function bindEvents() {
   window.addEventListener('app:refresh-route', renderRoute);
 }
 
-// ============================================================
-// Заполнение фильтра пользователей
-// ============================================================
 function populateUserFilter() {
   const userFilter = document.getElementById('userFilter');
   const currentValue = userFilter.value;
@@ -140,18 +146,12 @@ function populateUserFilter() {
   userFilter.value = currentValue || 'all';
 }
 
-// ============================================================
-// Получение выбранных приборов (для массовых операций)
-// ============================================================
 function getSelectedInstruments() {
   const checkboxes = document.querySelectorAll('.instrument-checkbox:checked');
   const ids = Array.from(checkboxes).map(cb => cb.value);
   return state.instruments.filter(i => ids.includes(String(i.id)));
 }
 
-// ============================================================
-// Вход
-// ============================================================
 async function onLogin(event) {
   event.preventDefault();
   const btn = event.target.querySelector('button[type="submit"]');
@@ -173,9 +173,6 @@ async function onLogin(event) {
   }
 }
 
-// ============================================================
-// Переключение экранов
-// ============================================================
 function showAuth() {
   document.getElementById('authView').classList.remove('hidden');
   document.getElementById('appView').classList.add('hidden');
@@ -190,14 +187,14 @@ function showApp() {
   document.querySelectorAll('.admin-only').forEach((node) =>
     node.classList.toggle('hidden', !isAdmin)
   );
-  document.getElementById('massRetireBtn').style.display = isAdmin ? 'inline-flex' : 'none';
-  document.getElementById('massDeleteBtn').style.display = isAdmin ? 'inline-flex' : 'none';
+  // Скрываем кнопки массовых операций при входе (если они были видны)
+  document.getElementById('massRetireBtn').style.display = 'none';
+  document.getElementById('massDeleteBtn').style.display = 'none';
+  document.getElementById('massToggleBtn').textContent = 'Выбрать';
+  state.massMode = false;
   renderRoute();
 }
 
-// ============================================================
-// Маршрутизация
-// ============================================================
 function renderRoute() {
   const id = new URLSearchParams(location.search).get('id');
   if (id) {
@@ -219,9 +216,6 @@ function goList() {
   renderRoute();
 }
 
-// ============================================================
-// Списанные приборы
-// ============================================================
 function showRetired() {
   const isAdmin = state.currentUser.role === 'admin';
   let html = '';
