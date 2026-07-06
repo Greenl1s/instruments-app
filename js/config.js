@@ -7,7 +7,6 @@ export const CONFIG = {
 
 // Массив всех доступных прокси-доменов (в порядке приоритета)
 export const PROXY_DOMAINS = [
-  'https://prox-cstroy.vercel.app',
   'https://prox-cstroy-git-main-greenlts-projects.vercel.app',
   'https://prox-cstroy-530uik1l-greenlts-projects.vercel.app'
 ];
