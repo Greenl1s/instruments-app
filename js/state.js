@@ -7,5 +7,6 @@ export const state = {
   currentUser: null,
   search: '',
   verification: 'all',
-  condition: 'all'
+  condition: 'all',
+  userFilter: 'all'
 };
