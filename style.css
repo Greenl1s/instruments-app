@@ -820,4 +820,10 @@ button .spinner {
     height: 48px;
     font-size: 22px;
   }
+   .instrument-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
 }
