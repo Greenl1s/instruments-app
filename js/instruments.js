@@ -65,9 +65,10 @@ export function renderList(openCard) {
   sortInstruments();
   const list = filteredInstruments();
   const isAdmin = state.currentUser.role === 'admin';
+  const showCheckboxes = isAdmin && state.massMode;
   const html = list.length ? list.map(item => {
-    const checkbox = isAdmin ? `<input type="checkbox" class="instrument-checkbox" value="${escapeAttr(item.id)}" style="margin-right:8px;">` : '';
-    return `<div class="row panel" style="display:grid; grid-template-columns: auto 1fr auto; align-items:center; gap:12px;">
+    const checkbox = showCheckboxes ? `<input type="checkbox" class="instrument-checkbox" value="${escapeAttr(item.id)}" style="margin-right:8px;">` : '';
+    return `<div class="row panel" style="display:grid; grid-template-columns: ${showCheckboxes ? 'auto ' : ''}1fr auto; align-items:center; gap:12px;">
       ${checkbox}
       <a href="?id=${escapeAttr(item.id)}" data-open-id="${escapeAttr(item.id)}" style="text-decoration:none; color:inherit; display:contents;">
         <div>
