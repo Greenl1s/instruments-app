@@ -1,5 +1,11 @@
 import { CONFIG } from './config.js';
 
+export const PROXY_DOMAINS = [
+  'https://prox-cstroy.vercel.app',
+  'https://prox-cstroy-git-main-greenlts-projects.vercel.app',
+  'https://prox-cstroy-530uik1l-greenlts-projects.vercel.app'
+];
+
 const TIMEOUT_MS = 15000; // 15 секунд таймаут
 
 /**
