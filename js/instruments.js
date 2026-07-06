@@ -50,25 +50,42 @@ export function conditionBadge(value) {
 
 export function filteredInstruments() {
   const q = state.search.trim().toLowerCase();
+  const user = state.userFilter || 'all';
   return state.instruments.filter((i) => {
     const search = !q || [i.name, i.serial_number, i.model].some((v) => String(v || '').toLowerCase().includes(q));
+    const userMatch = user === 'all' || i.taken_by === user || i.booked_by === user;
     return search &&
       (state.verification === 'all' || verificationState(i.valid_until) === state.verification) &&
-      (state.condition === 'all' || normalizeCondition(i.condition) === state.condition);
+      (state.condition === 'all' || normalizeCondition(i.condition) === state.condition) &&
+      userMatch;
   });
 }
 
-export function renderRow(item) {
-  return `<a class="row panel" href="?id=${escapeAttr(item.id)}" data-open-id="${escapeAttr(item.id)}">
-    <div>
-      <div class="row-title">#${escapeHtml(item.id)} ${escapeHtml(item.name || 'Без названия')}</div>
-      <div class="row-subtitle">${escapeHtml(item.model || 'Модель не указана')} · ${escapeHtml(item.serial_number || 'Серийный номер не указан')}</div>
-    </div>
-    <div class="badges">
-      <span class="badge ${verificationBadge(item.valid_until)}">${verificationText(item.valid_until)}</span>
-      <span class="badge ${conditionBadge(item.condition)}">${conditionText(item.condition)}</span>
-    </div>
-  </a>`;
+export function renderList(openCard) {
+  sortInstruments();
+  const list = filteredInstruments();
+  const isAdmin = state.currentUser.role === 'admin';
+  const html = list.length ? list.map(item => {
+    const checkbox = isAdmin ? `<input type="checkbox" class="instrument-checkbox" value="${escapeAttr(item.id)}" style="margin-right:8px;">` : '';
+    return `<div class="row panel" style="display:grid; grid-template-columns: auto 1fr auto; align-items:center; gap:12px;">
+      ${checkbox}
+      <a href="?id=${escapeAttr(item.id)}" data-open-id="${escapeAttr(item.id)}" style="text-decoration:none; color:inherit; display:contents;">
+        <div>
+          <div class="row-title">#${escapeHtml(item.id)} ${escapeHtml(item.name || 'Без названия')}</div>
+          <div class="row-subtitle">${escapeHtml(item.model || 'Модель не указана')} · ${escapeHtml(item.serial_number || 'Серийный номер не указан')}</div>
+        </div>
+        <div class="badges">
+          <span class="badge ${verificationBadge(item.valid_until)}">${verificationText(item.valid_until)}</span>
+          <span class="badge ${conditionBadge(item.condition)}">${conditionText(item.condition)}</span>
+        </div>
+      </a>
+    </div>`;
+  }).join('') : '<div class="panel card">Нет приборов по выбранным условиям</div>';
+  document.getElementById('instrumentList').innerHTML = html;
+  document.querySelectorAll('[data-open-id]').forEach((node) => node.onclick = (event) => {
+    event.preventDefault();
+    openCard(node.dataset.openId);
+  });
 }
 
 export function renderRetiredRow(item) {
@@ -82,16 +99,6 @@ export function renderRetiredRow(item) {
       ${isAdmin ? `<button class="secondary" data-open-retired-id="${escapeAttr(item.id)}">Открыть карточку</button><button class="primary" data-restore-id="${escapeAttr(item.id)}">Восстановить</button>` : ''}
     </div>
   </div>`;
-}
-
-export function renderList(openCard) {
-  sortInstruments();
-  const list = filteredInstruments();
-  document.getElementById('instrumentList').innerHTML = list.length ? list.map(renderRow).join('') : '<div class="panel card">Нет приборов по выбранным условиям</div>';
-  document.querySelectorAll('[data-open-id]').forEach((node) => node.onclick = (event) => {
-    event.preventDefault();
-    openCard(node.dataset.openId);
-  });
 }
 
 // ========== Карточка прибора ==========
@@ -181,6 +188,12 @@ export function renderCard(id, goList) {
     extraFields = `<div class="issued">${field('Кто взял', item.taken_by)}${field('Место', item.taken_where)}${field('Доп.данные', item.taken_extra)}${field('Дата выдачи', item.taken_date)}</div>`;
   }
 
+  // Комментарий
+  let commentHtml = '';
+  if (item.comment) {
+    commentHtml = `<div class="field"><div class="field-label">Комментарий</div><div class="field-value">${escapeHtml(item.comment)}</div></div>`;
+  }
+
   document.getElementById('cardScreen').innerHTML =
     `<article class="panel card">
       <h1>${escapeHtml(item.name || 'Без названия')}</h1>
@@ -197,6 +210,7 @@ export function renderCard(id, goList) {
         ${field('Действительно до', item.valid_until)}
         ${field('Документ', item.document_url ? `<a href="${escapeAttr(item.document_url)}" target="_blank" rel="noopener">Открыть</a>` : '—', true)}
       </div>
+      ${commentHtml}
       ${extraFields}
       ${actionsHtml}
     </article>`;
@@ -229,7 +243,7 @@ function bindCardActions(item, goList, isRetired) {
 
 export function showInstrumentForm(item = null) {
   const isEdit = Boolean(item);
-  const v = item || { id: nextId(), condition: 'free', type: 'Поверка', taken_extra: '' };
+  const v = item || { id: nextId(), condition: 'free', type: 'Поверка', taken_extra: '', comment: '' };
   openModal(isEdit ? 'Редактировать прибор' : 'Добавить прибор',
     `<form id="instrumentForm" class="form-grid">
       ${input('id', 'ID', v.id, 'number', true)}
@@ -240,6 +254,7 @@ export function showInstrumentForm(item = null) {
       ${input('verification_date', 'Дата поверки/калибровки', v.verification_date, 'date')}
       ${input('valid_until', 'Действительно до', v.valid_until, 'date')}
       ${input('document_url', 'Ссылка на документ', v.document_url, 'url')}
+      ${input('comment', 'Комментарий', v.comment || '', 'text')}
       ${select('condition', 'Состояние', v.condition, [['free', 'Свободен'], ['busy', 'Занят'], ['booked', 'Забронирован'], ['retired', 'Списан']])}
       ${isEdit ? input('taken_extra', 'Доп. данные при выдаче', v.taken_extra || '', 'text') : ''}
       <div class="modal-actions"><button class="primary" type="submit">Сохранить</button></div>
@@ -390,7 +405,7 @@ async function confirmBooking(item) {
 
 // ========== СПИСАТЬ ==========
 
-async function retireInstrument(item, goList) {
+export async function retireInstrument(item, goList) {
   if (!confirm('Списать прибор?')) return;
   closeHistoryEntry(item, state.currentUser.username);
   let newId = String(item.id);
@@ -409,7 +424,7 @@ async function retireInstrument(item, goList) {
   state.retired.push(retiredItem);
   state.instruments = state.instruments.filter((row) => row !== item);
   await saveWorkbook('Прибор списан');
-  goList();
+  if (goList) goList();
 }
 
 // ========== ВОССТАНОВИТЬ ==========
