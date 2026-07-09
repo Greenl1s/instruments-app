@@ -9,6 +9,3 @@ export const CONFIG = {
 
 };
 
-// Эти массивы больше не нужны, но оставим для совместимости
-export const SHEETS = {};
-export const HEADERS = {};
