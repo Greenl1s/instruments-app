@@ -5,7 +5,7 @@ export function addHistoryEntry(item) {
   state.history.push({
     instrument_id: item.id,
     instrument_name: item.name,
-    user: item.taken_by,
+    taken_by: item.taken_by,   // ← было user, стало taken_by
     place: item.taken_where,
     extra_data: item.taken_extra || '',
     issue_date: item.taken_date || today(),
